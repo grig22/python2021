@@ -30,10 +30,10 @@ def lines(name):
             yield line
 
 
-def parse(lines):
+def parse(text):
     regexp = r'(?P<remote_addr>\S+) .* (?P<request_time>\S+)'
     prog = re.compile(regexp)
-    for line in lines:
+    for line in text:
         result = prog.match(line)
         yield result.groupdict()
 
