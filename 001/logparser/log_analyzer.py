@@ -3,6 +3,7 @@
 import gzip
 import re
 import statistics
+import json
 
 config = {
     "REPORT_SIZE": 1000,
@@ -41,7 +42,6 @@ def parse(text):
 
 def push(coll, data):
     url, time = data
-    print('push -->', url, time)
     if url not in coll.keys():
         coll[url] = list()
     coll[url].append(time)
@@ -54,7 +54,6 @@ def push(coll, data):
 # "time_max": 9843.5689999999995, - максимальный $request_time для данного URL'а
 # "time_sum": 174306.35200000001, - суммарный $request_time для данного URL'а, абсолютное значение
 # "time_med": 60.073, - медиана $request_time для данного URL'а
-
 # "time_perc": 9.0429999999999993, - суммарный $request_time для данного URL'а,
 #   в процентах относительно общего $request_time всех запросов
 # "count_perc": 0.106}  - сколько раз встречается URL, в процентах относительно общего числа запросов
@@ -80,20 +79,32 @@ def stat(coll):
         stats = coll[url]
         stats['time_perc'] = 100 * stats['time_sum'] / overall['time']
         stats['count_perc'] = 100 * stats['count'] / overall['count']
+        # вот такое округление
+        for key in stats:
+            fl = stats[key]
+            if isinstance(fl, float):
+                stats[key] = f'{fl:.3f}'
         yield stats
+
+
+def fill(data):
+    with open('report.html', mode='rt', encoding="utf-8") as fi:
+        body = fi.read()
+        body = body.replace('$table_json', json.dumps(data))
+        with open('report-2222.html', mode='wt', encoding="utf-8") as fo:
+            fo.write(body)
 
 
 def main():
     coll = dict()
-    data_iter = parse(lines(filename()))
     count = 0
-    for data in data_iter:
+    for data in parse(lines(filename())):
         push(coll, data)
         count += 1
-        if count > 10:
+        if count >= 20:
             break
-    for yy in stat(coll):
-        print(yy)
+    fill([val for val in stat(coll)])
+
 
 if __name__ == "__main__":
     main()
