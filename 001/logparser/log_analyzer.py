@@ -5,10 +5,11 @@ import re
 import statistics
 import json
 
+# Использовать конфиг как глобальную переменную запрещено
 config = {
     "REPORT_SIZE": 1000,
-    "REPORT_DIR": "./reports",
-    "LOG_DIR": "./log"
+    "REPORT_DIR": "./reports",  # TODO
+    "LOG_DIR": "./log",  # TODO
 }
 
 
@@ -62,7 +63,7 @@ def stat(coll):
         'time': 0.0,
         'count': 0.0,
     }
-    for url in coll.keys():
+    for url in coll:
         times = list(map(float, coll[url]))
         stats = {
             'url': url,
@@ -75,22 +76,21 @@ def stat(coll):
         overall['time'] += stats['time_sum']
         overall['count'] += stats['count']
         coll[url] = stats
-    for url in coll.keys():
+    # второй проход - когда посчитаны overall
+    for url in coll:
         stats = coll[url]
         stats['time_perc'] = 100 * stats['time_sum'] / overall['time']
         stats['count_perc'] = 100 * stats['count'] / overall['count']
-        # вот такое округление
-        for key in stats:
-            fl = stats[key]
-            if isinstance(fl, float):
-                stats[key] = f'{fl:.3f}'
-        yield stats
+        for k, v in stats.items():
+            if isinstance(v, float):
+                stats[k] = round(v, 3)
+    return sorted(list(coll.values()), key=lambda x: x['time_sum'], reverse=True)[:config["REPORT_SIZE"]]
 
 
 def fill(data):
     with open('report.html', mode='rt', encoding="utf-8") as fi:
         body = fi.read()
-        body = body.replace('$table_json', json.dumps(data))
+        body = body.replace('$table_json', json.dumps(data, ensure_ascii=False))
         with open('report-2222.html', mode='wt', encoding="utf-8") as fo:
             fo.write(body)
 
@@ -100,9 +100,9 @@ def main():
     count = 0
     for data in parse(lines(filename())):
         push(coll, data)
-        count += 1
-        if count >= 20:
-            break
+        # count += 1
+        # if count >= 20:
+        #     break
     fill([val for val in stat(coll)])
 
 
