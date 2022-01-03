@@ -4,22 +4,17 @@ import gzip
 import re
 import statistics
 import json
-
-# Использовать конфиг как глобальную переменную запрещено
-config = {
-    "REPORT_SIZE": 1000,
-    "REPORT_DIR": "./reports",  # TODO
-    "LOG_DIR": "./log",  # TODO
-}
+import sys
 
 
-def filename():
+def select_filename(conf):
     # TODO честно выбирать из многих файлов
     # TODO проверять время в имени файла и что есть ли для него уже отчёт
-    return 'nginx-access-ui.log-20170630.gz'
+    log_dir = conf['LOG_DIR']
+    return f'{log_dir}/nginx-access-ui.log-20170630.gz'
 
 
-def lines(name):
+def yield_lines(name):
     ext = name.split('.')[-1]
     opener = {
         'gz': gzip.open,
@@ -58,7 +53,7 @@ def push(coll, data):
 # "time_perc": 9.0429999999999993, - суммарный $request_time для данного URL'а,
 #   в процентах относительно общего $request_time всех запросов
 # "count_perc": 0.106}  - сколько раз встречается URL, в процентах относительно общего числа запросов
-def stat(coll):
+def stat(coll, conf):
     overall = {
         'time': 0.0,
         'count': 0.0,
@@ -81,29 +76,50 @@ def stat(coll):
         stats = coll[url]
         stats['time_perc'] = 100 * stats['time_sum'] / overall['time']
         stats['count_perc'] = 100 * stats['count'] / overall['count']
+        # kinda post-processing
         for k, v in stats.items():
             if isinstance(v, float):
                 stats[k] = round(v, 3)
-    return sorted(list(coll.values()), key=lambda x: x['time_sum'], reverse=True)[:config["REPORT_SIZE"]]
+    return sorted(list(coll.values()), key=lambda x: x['time_sum'], reverse=True)[:conf["REPORT_SIZE"]]
 
 
-def fill(data):
-    with open('report.html', mode='rt', encoding="utf-8") as fi:
-        body = fi.read()
-        body = body.replace('$table_json', json.dumps(data, ensure_ascii=False))
-        with open('report-2222.html', mode='wt', encoding="utf-8") as fo:
-            fo.write(body)
+def save_report(data, conf):
+    template_filename = 'report.html'
+    rep_dir = conf['REPORT_DIR']
+    output_filename = f'{rep_dir}/report-2222.html'  # TODO filename
+    with open(template_filename, mode='rt', encoding="utf-8") as fi:
+        body = fi.read().replace('$table_json', json.dumps(data, ensure_ascii=False))
+    with open(output_filename, mode='wt', encoding="utf-8") as fo:
+        fo.write(body)
+
+
+def apply_config(config, filename):
+    print(f'using config "{filename}"')
+    with open(filename, mode='rt', encoding="utf-8") as ff:
+        conf_json = json.load(ff)
+        for k in conf_json:
+            if k in config:
+                config[k] = conf_json[k]
 
 
 def main():
-    coll = dict()
-    count = 0
-    for data in parse(lines(filename())):
-        push(coll, data)
-        # count += 1
-        # if count >= 20:
-        #     break
-    fill([val for val in stat(coll)])
+    config = {
+        "REPORT_SIZE": 1000,
+        "REPORT_DIR": "./reports",  # TODO
+        "LOG_DIR": "./log",  # TODO
+    }
+    collector = dict()
+    try:
+        if len(sys.argv) >= 2 and sys.argv[1] == '--config':
+            apply_config(config, sys.argv[2])
+        print(f'config = {config}')
+        log_filename = select_filename(conf=config)
+        for data in parse(yield_lines(log_filename)):
+            push(collector, data)
+        report = stat(coll=collector, conf=config)
+        save_report(data=report, conf=config)
+    except Exception as ex:
+        print(f'ВОЗНИКЛО ИСКЛЮЧЕНИЕ: line {sys.exc_info()[2].tb_lineno} "{ex}"')
 
 
 if __name__ == "__main__":
