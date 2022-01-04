@@ -38,7 +38,7 @@ def get_last_log(log_dir):
     if not files:
         raise Exception(f'Нету лога в каталоге "{log_dir}"')
     fresh = files[0]
-    logging.info(f'Обнаружен свежий лог "{fresh}"')
+    logging.info(f'Обнаружен свежий лог "{fresh.name}"')
     return fresh
 
 
@@ -127,7 +127,6 @@ def save_report(report, report_dir, report_fullname):
 
 
 def merge_config(config, filename):
-    logging.info(f'Используем файл конфигурации "{filename}"')
     if os.stat(filename).st_size == 0:
         return
     with open(filename, mode='rt', encoding="utf-8") as ff:
@@ -143,7 +142,7 @@ def main():
         "REPORT_DIR": "./reports",
         "LOG_DIR": "./log",
         "MAX_ERROR_PERCENT": 2,
-        # "MY_LOG_FILENAME": "my.log",
+        "MY_LOG_FILENAME": "my.log",
     }
     collector = dict()
 
@@ -151,16 +150,12 @@ def main():
         if len(sys.argv) >= 2 and sys.argv[1] == '--config':
             merge_config(config, sys.argv[2])
         config_str = f'Параметры конфигурации {config}'
-        logging.info(config_str)
-
-        my_log = config.get('MY_LOG_FILENAME')
-        logging.info(f'Лог пишется в файл "{my_log}"')
 
         logging.basicConfig(
             format='[%(asctime)s] %(levelname).1s %(message)s',
             datefmt='%Y.%m.%d %H:%M:%S',
             level=logging.DEBUG,
-            filename=my_log,
+            filename=config.get('MY_LOG_FILENAME'),
         )
 
         logging.info('Выполнение начато')
