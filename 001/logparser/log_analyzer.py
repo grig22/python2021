@@ -19,14 +19,22 @@ def split_filenames(names):
             result = prog.match(name)
             dd = result.group(1)
             date = datetime.date.fromisoformat(f'{dd[0:4]}-{dd[4:6]}-{dd[6:8]}')
+            extension = result.group(2)
+            if extension not in ['gz', '']:
+                continue
         except:
             continue
         else:
-            yield Filename(name=name, date=date, extension=result.group(2))
+            yield Filename(name=name, date=date, extension=extension)
 
 
 def get_last_log(log_dir):
-    return sorted(split_filenames(os.listdir(log_dir)), key=lambda x: x.date, reverse=True)[0]
+    if not os.path.isdir(log_dir):
+        raise Exception(f'Нет каталога "{log_dir}"')
+    files = sorted(split_filenames(os.listdir(log_dir)), key=lambda x: x.date, reverse=True)
+    if not files:
+        raise Exception(f'Не найдены никакие логи в каталоге "{log_dir}"')
+    return files[0]
 
 
 def yield_lines(filename, extension):
@@ -40,12 +48,21 @@ def yield_lines(filename, extension):
 #                     '$status $body_bytes_sent "$http_referer" '
 #                     '"$http_user_agent" "$http_x_forwarded_for" "$http_X_REQUEST_ID" "$http_X_RB_USER" '
 #                     '$request_time';
-def parse(text):
-    regexp = r'\S+\s+\S+\s+\S+\s+\[.+?\]\s+\"\S+\s+(.+?)\s+\S+\".*\s+(\S+)'
+def parse(text, max_err_perc):
+    overall, errors = 0, 0
+    regexp = r'\S+\s+\S+\s+\S+\s+\[.+?\]\s+\"\S+\s+(.+?)\s+\S+\".*\s+([\d.]+)$'
     prog = re.compile(regexp)
     for line in text:
-        result = prog.match(line)  # TODO считать ошибки
+        overall += 1
+        result = prog.match(line)
+        if not result:
+            errors += 1
+            continue
+        print(result.group(1, 2))
         yield result.group(1, 2)
+    err_perc = 100 * errors / overall
+    if err_perc > max_err_perc:
+        raise Exception(f'Слишком много ошибок {err_perc:.2f}% а можно {max_err_perc}%')
 
 
 def push(coll, data):
@@ -117,8 +134,9 @@ def apply_config(config, filename):
 def main():
     config = {
         "REPORT_SIZE": 1000,
-        "REPORT_DIR": "./reports",  # TODO
-        "LOG_DIR": "./log",  # TODO
+        "REPORT_DIR": "./reports",
+        "LOG_DIR": "./log",
+        "MAX_ERROR_PERCENT": 2,
     }
     collector = dict()
     try:
@@ -130,9 +148,10 @@ def main():
         name, date, ext = get_last_log(log_dir)
         report_fullname = f'{report_dir}/report-{date.isoformat().replace("-", ".")}.html'
         if os.path.isfile(report_fullname):
-            raise Exception(f'Файл "{report_fullname}" уже существует, всё отменяется')
+            pass
+            # raise Exception(f'Файл "{report_fullname}" уже существует, всё отменяется')
         log_fullname = f'{log_dir}/{name}'
-        for data in parse(yield_lines(log_fullname, ext)):
+        for data in parse(text=yield_lines(log_fullname, ext), max_err_perc=config['MAX_ERROR_PERCENT']):
             push(collector, data)
         report = stat(collector=collector, report_size=config['REPORT_SIZE'])
         save_report(data=report, report_dir=report_dir, report_fullname=report_fullname)
