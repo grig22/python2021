@@ -24,18 +24,22 @@ def split_filenames(names):
             if extension not in ['gz', '']:
                 continue
         except:
+            # да мы знаем что так нехорошо
             continue
         else:
             yield Filename(name=name, date=date, extension=extension)
 
 
 def get_last_log(log_dir):
+    logging.info(f'Смотрим логи в каталоге "{log_dir}"')
     if not os.path.isdir(log_dir):
-        raise Exception(f'Нет каталога "{log_dir}"')
+        raise Exception(f'Нету каталога "{log_dir}"')
     files = sorted(split_filenames(os.listdir(log_dir)), key=lambda x: x.date, reverse=True)
     if not files:
-        raise Exception(f'Не найдены никакие логи в каталоге "{log_dir}"')
-    return files[0]
+        raise Exception(f'Нету лога в каталоге "{log_dir}"')
+    fresh = files[0]
+    logging.info(f'Обнаружен свежий лог "{fresh}"')
+    return fresh
 
 
 def yield_lines(filename, extension):
@@ -45,12 +49,21 @@ def yield_lines(filename, extension):
             yield line
 
 
+def push(collector, data):
+    url, time = data
+    if url not in collector.keys():
+        collector[url] = list()
+    collector[url].append(time)
+    pass
+
+
 # log_format ui_short '$remote_addr  $remote_user $http_x_real_ip [$time_local] "$request" '
 #                     '$status $body_bytes_sent "$http_referer" '
 #                     '"$http_user_agent" "$http_x_forwarded_for" "$http_X_REQUEST_ID" "$http_X_RB_USER" '
 #                     '$request_time';
-def parse(text, max_err_perc):
+def parse_log(collector, text, max_err_perc):
     overall, errors = 0, 0
+    # TODO не очень красивая регулярка
     regexp = r'\S+\s+\S+\s+\S+\s+\[.+?\]\s+\"\S+\s+(.+?)\s+\S+\".*\s+([\d.]+)$'
     prog = re.compile(regexp)
     for line in text:
@@ -59,18 +72,11 @@ def parse(text, max_err_perc):
         if not result:
             errors += 1
             continue
-        yield result.group(1, 2)
+        push(collector=collector, data=result.group(1, 2))
     err_perc = 100 * errors / overall
+    logging.info(f'Обработано строк {overall}, из них ошибочных {errors}, это {err_perc}%')
     if err_perc > max_err_perc:
-        raise Exception(f'Слишком много ошибок {err_perc:.2f}% а можно {max_err_perc}%')
-
-
-def push(coll, data):
-    url, time = data
-    if url not in coll.keys():
-        coll[url] = list()
-    coll[url].append(time)
-    pass
+        raise Exception(f'Слишком много ошибок {err_perc:.2f}% а можно только {max_err_perc}%')
 
 
 # "url": "/api/v2/internal/html5/phantomjs/queue/?wait=1m",
@@ -82,7 +88,7 @@ def push(coll, data):
 # "time_perc": 9.0429999999999993, - суммарный $request_time для данного URL'а,
 #   в процентах относительно общего $request_time всех запросов
 # "count_perc": 0.106}  - сколько раз встречается URL, в процентах относительно общего числа запросов
-def stat(collector, report_size):
+def calculate_statistics(collector, report_size):
     overall = {
         'time': 0.0,
         'count': 0.0,
@@ -112,16 +118,16 @@ def stat(collector, report_size):
     return sorted(list(collector.values()), key=lambda x: x['time_sum'], reverse=True)[:report_size]
 
 
-def save_report(data, report_dir, report_fullname):
+def save_report(report, report_dir, report_fullname):
     os.makedirs(report_dir, exist_ok=True)
     with open('report.html', mode='rt', encoding="utf-8") as fi:
-        body = fi.read().replace('$table_json', json.dumps(data, ensure_ascii=False))
+        body = fi.read().replace('$table_json', json.dumps(report, ensure_ascii=False))
     with open(report_fullname, mode='wt', encoding="utf-8") as fo:
         fo.write(body)
 
 
-def apply_config(config, filename):
-    print(f'Используем файл конфигурации "{filename}"', flush=True)
+def merge_config(config, filename):
+    logging.info(f'Используем файл конфигурации "{filename}"')
     if os.stat(filename).st_size == 0:
         return
     with open(filename, mode='rt', encoding="utf-8") as ff:
@@ -143,38 +149,44 @@ def main():
 
     try:
         if len(sys.argv) >= 2 and sys.argv[1] == '--config':
-            apply_config(config, sys.argv[2])
+            merge_config(config, sys.argv[2])
         config_str = f'Параметры конфигурации {config}'
-        print(config_str, flush=True)
+        logging.info(config_str)
+
         my_log = config.get('MY_LOG_FILENAME')
-        print(f'Лог пишется в файл "{my_log}"', flush=True)
+        logging.info(f'Лог пишется в файл "{my_log}"')
+
         logging.basicConfig(
             format='[%(asctime)s] %(levelname).1s %(message)s',
             datefmt='%Y.%m.%d %H:%M:%S',
             level=logging.DEBUG,
             filename=my_log,
         )
+
         logging.info('Выполнение начато')
         logging.info(config_str)
+
         log_dir = config['LOG_DIR']
         report_dir = config['REPORT_DIR']
         name, date, ext = get_last_log(log_dir)
         log_fullname = f'{log_dir}/{name}'
-        logging.info(f'Обнаружен свежий лог "{log_fullname}"')
         report_fullname = f'{report_dir}/report-{date.isoformat().replace("-", ".")}.html'
         if os.path.isfile(report_fullname):
             raise Exception(f'Файл "{report_fullname}" уже существует, всё отменяется')
+
         logging.info(f'Парсим лог "{log_fullname}"')
-        for data in parse(text=yield_lines(log_fullname, ext), max_err_perc=config['MAX_ERROR_PERCENT']):
-            push(collector, data)
+        parse_log(collector=collector, text=yield_lines(log_fullname, ext), max_err_perc=config['MAX_ERROR_PERCENT'])
+
         logging.info(f'Считаем статистику')
-        report = stat(collector=collector, report_size=config['REPORT_SIZE'])
+        report = calculate_statistics(collector=collector, report_size=config['REPORT_SIZE'])
+
         logging.info(f'Пишем отчёт "{report_fullname}"')
-        save_report(data=report, report_dir=report_dir, report_fullname=report_fullname)
+        save_report(report=report, report_dir=report_dir, report_fullname=report_fullname)
+
         logging.info(f'Выполнение завершено')
     except Exception as ex:
-        logging.error(f'ВОЗНИКЛО ИСКЛЮЧЕНИЕ в строке {sys.exc_info()[2].tb_lineno}: {sys.exc_info()[0].__name__} {ex}')
-        # raise
+        ei = sys.exc_info()
+        logging.exception(f'ВОЗНИКЛО ИСКЛЮЧЕНИЕ в строке {ei[2].tb_lineno} {ei[0]} {ex}')
 
 
 if __name__ == "__main__":
