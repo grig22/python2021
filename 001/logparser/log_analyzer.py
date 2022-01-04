@@ -8,6 +8,7 @@ import sys
 import os
 import datetime
 import collections
+import logging
 
 
 def split_filenames(names):
@@ -58,7 +59,6 @@ def parse(text, max_err_perc):
         if not result:
             errors += 1
             continue
-        print(result.group(1, 2))
         yield result.group(1, 2)
     err_perc = 100 * errors / overall
     if err_perc > max_err_perc:
@@ -121,7 +121,7 @@ def save_report(data, report_dir, report_fullname):
 
 
 def apply_config(config, filename):
-    print(f'Используем файл конфигурации "{filename}"')
+    print(f'Используем файл конфигурации "{filename}"', flush=True)
     if os.stat(filename).st_size == 0:
         return
     with open(filename, mode='rt', encoding="utf-8") as ff:
@@ -137,27 +137,44 @@ def main():
         "REPORT_DIR": "./reports",
         "LOG_DIR": "./log",
         "MAX_ERROR_PERCENT": 2,
+        # "MY_LOG_FILENAME": "my.log",
     }
     collector = dict()
+
     try:
         if len(sys.argv) >= 2 and sys.argv[1] == '--config':
             apply_config(config, sys.argv[2])
-        print(f'Параметры конфигурации {config}')
+        config_str = f'Параметры конфигурации {config}'
+        print(config_str, flush=True)
+        my_log = config.get('MY_LOG_FILENAME')
+        print(f'Лог пишется в файл "{my_log}"', flush=True)
+        logging.basicConfig(
+            format='[%(asctime)s] %(levelname).1s %(message)s',
+            datefmt='%Y.%m.%d %H:%M:%S',
+            level=logging.DEBUG,
+            filename=my_log,
+        )
+        logging.info('Выполнение начато')
+        logging.info(config_str)
         log_dir = config['LOG_DIR']
         report_dir = config['REPORT_DIR']
         name, date, ext = get_last_log(log_dir)
+        log_fullname = f'{log_dir}/{name}'
+        logging.info(f'Обнаружен свежий лог "{log_fullname}"')
         report_fullname = f'{report_dir}/report-{date.isoformat().replace("-", ".")}.html'
         if os.path.isfile(report_fullname):
-            pass
-            # raise Exception(f'Файл "{report_fullname}" уже существует, всё отменяется')
-        log_fullname = f'{log_dir}/{name}'
+            raise Exception(f'Файл "{report_fullname}" уже существует, всё отменяется')
+        logging.info(f'Парсим лог "{log_fullname}"')
         for data in parse(text=yield_lines(log_fullname, ext), max_err_perc=config['MAX_ERROR_PERCENT']):
             push(collector, data)
+        logging.info(f'Считаем статистику')
         report = stat(collector=collector, report_size=config['REPORT_SIZE'])
+        logging.info(f'Пишем отчёт "{report_fullname}"')
         save_report(data=report, report_dir=report_dir, report_fullname=report_fullname)
+        logging.info(f'Выполнение завершено')
     except Exception as ex:
-        print(f'ВОЗНИКЛО ИСКЛЮЧЕНИЕ в строке {sys.exc_info()[2].tb_lineno}: {sys.exc_info()[0].__name__} "{ex}"')
-        raise
+        logging.error(f'ВОЗНИКЛО ИСКЛЮЧЕНИЕ в строке {sys.exc_info()[2].tb_lineno}: {sys.exc_info()[0].__name__} {ex}')
+        # raise
 
 
 if __name__ == "__main__":
