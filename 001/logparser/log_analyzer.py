@@ -24,7 +24,6 @@ def split_filenames(names):
             if extension not in ['gz', '']:
                 continue
         except:
-            # да мы знаем что так нехорошо
             continue
         else:
             yield Filename(name=name, date=date, extension=extension)
@@ -57,14 +56,14 @@ def push(collector, data):
     pass
 
 
-# log_format ui_short '$remote_addr  $remote_user $http_x_real_ip [$time_local] "$request" '
-#                     '$status $body_bytes_sent "$http_referer" '
-#                     '"$http_user_agent" "$http_x_forwarded_for" "$http_X_REQUEST_ID" "$http_X_RB_USER" '
-#                     '$request_time';
+# log_format ui_short
+# '$remote_addr  $remote_user $http_x_real_ip [$time_local] "$request" '
+# '$status $body_bytes_sent "$http_referer" '
+# '"$http_user_agent" "$http_x_forwarded_for" "$http_X_REQUEST_ID" "$http_X_RB_USER" '
+# '$request_time';
 def parse_log(collector, text, max_err_perc):
     overall, errors = 0, 0
-    # TODO не очень красивая регулярка
-    regexp = r'\S+\s+\S+\s+\S+\s+\[.+?\]\s+\"\S+\s+(.+?)\s+\S+\".*\s+([\d.]+)$'
+    regexp = r'(?:\S+\s+){3}\[.+?\]\s+\"\S+\s+(.+?)\s+\S+\".*\s+([\d.]+)$'
     prog = re.compile(regexp)
     for line in text:
         overall += 1
@@ -74,7 +73,7 @@ def parse_log(collector, text, max_err_perc):
             continue
         push(collector=collector, data=result.group(1, 2))
     err_perc = 100 * errors / overall
-    logging.info(f'Обработано строк {overall}, из них ошибочных {errors}, это {err_perc}%')
+    logging.info(f'Обработано строк {overall}, из них ошибочных {errors}, это {err_perc:.2f}%')
     if err_perc > max_err_perc:
         raise Exception(f'Слишком много ошибок {err_perc:.2f}% а можно только {max_err_perc}%')
 
@@ -89,10 +88,8 @@ def parse_log(collector, text, max_err_perc):
 #   в процентах относительно общего $request_time всех запросов
 # "count_perc": 0.106}  - сколько раз встречается URL, в процентах относительно общего числа запросов
 def calculate_statistics(collector, report_size):
-    overall = {
-        'time': 0.0,
-        'count': 0.0,
-    }
+    overall_time = 0.0
+    overall_count = 0.0
     for url in collector:
         times = list(map(float, collector[url]))
         stats = {
@@ -103,14 +100,14 @@ def calculate_statistics(collector, report_size):
             'time_sum': sum(times),
             'time_med': statistics.median(times),
         }
-        overall['time'] += stats['time_sum']
-        overall['count'] += stats['count']
+        overall_time += stats['time_sum']
+        overall_count += stats['count']
         collector[url] = stats
     # второй проход - когда посчитаны overall
     for url in collector:
         stats = collector[url]
-        stats['time_perc'] = 100 * stats['time_sum'] / overall['time']
-        stats['count_perc'] = 100 * stats['count'] / overall['count']
+        stats['time_perc'] = 100 * stats['time_sum'] / overall_time
+        stats['count_perc'] = 100 * stats['count'] / overall_count
         # kinda post-processing
         for k, v in stats.items():
             if isinstance(v, float):
@@ -118,10 +115,10 @@ def calculate_statistics(collector, report_size):
     return sorted(list(collector.values()), key=lambda x: x['time_sum'], reverse=True)[:report_size]
 
 
-def save_report(report, report_dir, report_fullname):
+def save_report(report_data, report_dir, report_fullname):
     os.makedirs(report_dir, exist_ok=True)
     with open('report.html', mode='rt', encoding="utf-8") as fi:
-        body = fi.read().replace('$table_json', json.dumps(report, ensure_ascii=False))
+        body = fi.read().replace('$table_json', json.dumps(report_data, ensure_ascii=False))
     with open(report_fullname, mode='wt', encoding="utf-8") as fo:
         fo.write(body)
 
@@ -149,7 +146,6 @@ def main():
     try:
         if len(sys.argv) >= 2 and sys.argv[1] == '--config':
             merge_config(config, sys.argv[2])
-        config_str = f'Параметры конфигурации {config}'
 
         logging.basicConfig(
             format='[%(asctime)s] %(levelname).1s %(message)s',
@@ -158,30 +154,41 @@ def main():
             filename=config.get('MY_LOG_FILENAME'),
         )
 
-        logging.info('Выполнение начато')
-        logging.info(config_str)
+        logging.info('--> Выполнение начато')
+        logging.info(f'Параметры конфигурации {config}')
 
         log_dir = config['LOG_DIR']
         report_dir = config['REPORT_DIR']
-        name, date, ext = get_last_log(log_dir)
+        name, date, extension = get_last_log(log_dir)
+
         log_fullname = f'{log_dir}/{name}'
         report_fullname = f'{report_dir}/report-{date.isoformat().replace("-", ".")}.html'
         if os.path.isfile(report_fullname):
             raise Exception(f'Файл "{report_fullname}" уже существует, всё отменяется')
 
         logging.info(f'Парсим лог "{log_fullname}"')
-        parse_log(collector=collector, text=yield_lines(log_fullname, ext), max_err_perc=config['MAX_ERROR_PERCENT'])
+        parse_log(collector=collector,
+                  text=yield_lines(filename=log_fullname, extension=extension),
+                  max_err_perc=config['MAX_ERROR_PERCENT'])
 
         logging.info(f'Считаем статистику')
-        report = calculate_statistics(collector=collector, report_size=config['REPORT_SIZE'])
+        report_data = calculate_statistics(collector=collector,
+                                           report_size=config['REPORT_SIZE'])
 
         logging.info(f'Пишем отчёт "{report_fullname}"')
-        save_report(report=report, report_dir=report_dir, report_fullname=report_fullname)
+        save_report(report_data=report_data,
+                    report_dir=report_dir,
+                    report_fullname=report_fullname)
 
-        logging.info(f'Выполнение завершено')
+        logging.info(f'--> Выполнение завершено')
+
     except Exception as ex:
-        ei = sys.exc_info()
-        logging.exception(f'ВОЗНИКЛО ИСКЛЮЧЕНИЕ в строке {ei[2].tb_lineno} {ei[0]} {ex}')
+        # ei = sys.exc_info()
+        # logging.exception(f'ВОЗНИКЛО ИСКЛЮЧЕНИЕ в строке {ei[2].tb_lineno} {ei[0]} {ex}')
+        logging.exception(f'ВОЗНИКЛО ИСКЛЮЧЕНИЕ')
+
+    except:
+        logging.exception(f'НЕБЫВАЛОЕ ИСКЛЮЧЕНИЕ')
 
 
 if __name__ == "__main__":
