@@ -28,9 +28,9 @@ def decorator(deco):
     # @wraps(deco)
     def deco_wrapper(*args):
         func = args[0]
-        print('DECO =', deco.__name__, 'FUNC =', func.__name__, 'ARGS =', args)
+        # print('DECO =', deco.__name__, 'FUNC =', func.__name__, 'ARGS =', args)
         decorated = deco(*args)
-        print("RATED =", decorated)
+        # print("RATED =", decorated)
         update_wrapper(decorated, func)
         return decorated
     return deco_wrapper
@@ -41,7 +41,7 @@ def countcalls(func):
     """Decorator that counts calls made to the function decorated."""
     def count_wrapper(*args):
         count_wrapper.calls += 1
-        print('! count_wrapper.calls =', count_wrapper.calls)
+        # print('! count_wrapper.calls =', count_wrapper.calls)
         res = func(*args)
         return res
     # https://stackoverflow.com/questions/17043524/adding-new-member-variables-to-python-objects
@@ -59,7 +59,7 @@ def memo(func):
     cache = {}
 
     def memorize_function(*args):
-        print('! memorize_function, cache =', cache)
+        # print('! memorize_function, cache =', cache)
         if args in cache:
             return cache[args]
         result = func(*args)
@@ -75,6 +75,7 @@ def n_ary(func):
     that f(x, y, z) = f(x, f(y,z)), etc. Also allow f(x) = x.
     """
     def n_ary_f(x, *args):
+        # print('! n_ary_f', func.__name__, x, args)
         return x if not args else func(x, n_ary_f(*args))
 
     return n_ary_f
@@ -111,47 +112,51 @@ def trace(indent=' '*4):
     return trace_func
 
 
-# @countcalls
-@memo
 @countcalls
-# @n_ary
+@memo
+@n_ary
 def foo(a, b):
     """Foooo Doccc"""
-    print('FOO', a, b)
+    # print('? foo', a, b)
     return a + b
 
 
-# @countcalls
-# @memo
-# @n_ary
-# def bar(a, b):
-#     return a * b
-#
-#
-# @countcalls
-# @trace("####")
-# @memo
-# def fib(n):
-#     """FIBBOONNACCIII"""
-#     return 1 if n <= 1 else fib(n-1) + fib(n-2)
+@countcalls
+@memo
+@n_ary
+def bar(a, b):
+    # print('? bar', a, b)
+    return a * b
+
+
+@countcalls
+@trace("____")
+@memo
+def fib(n):
+    """FIBBOONNACCIII"""
+    # print('? fib', n)
+    return 1 if n <= 1 else fib(n-1) + fib(n-2)
 
 
 def main():
-    print('----?', foo.__name__, foo.__doc__)
+    print()
+    # print('FOO', foo.__name__, foo.__doc__)
     print(foo(4, 3))
-    # print(foo(4, 3, 2))
-    print(foo(4, 3))
-    print(foo(4, 5))
+    print(foo(4, 3, 2))
+    print(foo(4, 24))
     print("foo was called", foo.calls, "times")
+    print()
 
-    # print(bar(4, 3))
-    # print(bar(4, 3, 2))
-    # print(bar(4, 3, 2, 1))
-    # print("bar was called", bar.calls, "times")
-    #
-    # print(fib.__doc__)
-    # fib(3)
-    # print(fib.calls, 'calls made')
+    # print('BAR', bar.__name__, bar.__doc__)
+    print(bar(4, 3))
+    print(bar(4, 3, 2))
+    print(bar(4, 3, 2, 1))
+    print("bar was called", bar.calls, "times")
+    print()
+
+    # print('FIB', fib.__name__, fib.__doc__)
+    fib(3)
+    print(fib.calls, 'fib calls made')
 
 
 if __name__ == '__main__':
