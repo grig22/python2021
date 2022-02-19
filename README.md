@@ -1,2 +1,4 @@
 # python2021
-Мои курсы → Python Developer. Professional
+Мои курсы Python Developer. Professional
+
+Python 3.9
