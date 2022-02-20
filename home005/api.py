@@ -10,6 +10,7 @@ import uuid
 from optparse import OptionParser
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import re
+from scoring import get_score, get_interests
 
 SALT = "Otus"
 ADMIN_LOGIN = "admin"
@@ -194,9 +195,11 @@ class ExecutionError(Exception):
 
 def validate(body, schema):
     errors = dict()
+    print('body', body)
     for attr, field in vars(schema).items():
         if attr.startswith('__'):
             continue
+        print('-->', attr)
         if field.required and attr not in body:
             errors[attr] = f'Required field missing: {attr}'
             continue
@@ -208,7 +211,6 @@ def validate(body, schema):
             continue
     # присутствует хоть одна пара phone-email, first name-last name, gender-birthday с непустыми значениями.
     if isinstance(schema, OnlineScoreRequest):
-        count_pairs = 0
         for pair in [
             ('phone', 'email'),
             ('first_name', 'last_name'),
@@ -225,18 +227,18 @@ def validate(body, schema):
 
 
 def online_score(arguments):
-    pass
+    return {'score': get_score(store=None, **arguments)}
 
 
 def clients_interests(arguments):
-    return {"1": ["books", "hi-tech"], "2": ["pets", "tv"]}
+    return {cid: get_interests(store=None, cid=cid) for cid in arguments['client_ids']}
 
 
 def method_handler(request, ctx, store):
     # TODO декоратор схемы валидации на каждый метод
     method_map = {
         'online_score': (online_score, OnlineScoreRequest),
-        'clients_interests': (clients_interests, OnlineScoreRequest),
+        'clients_interests': (clients_interests, ClientsInterestsRequest),
     }
     body = request["body"]
     try:

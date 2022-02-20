@@ -13,7 +13,7 @@ data = {
     'login': 'username',
     'method': 'clients_interests',
     'token': '123456',
-    'arguments': {11: 22, 'what': 'nope'}
+    'arguments': {'client_ids': [1, 2, 3, 4], "date": "20.07.2017"},
 }
 
 res = requests.post(url=url, headers=headers, data=json.dumps(data))
