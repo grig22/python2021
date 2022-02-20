@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3.9
 # -*- coding: utf-8 -*-
 
 import abc
@@ -8,7 +8,7 @@ import logging
 import hashlib
 import uuid
 from optparse import OptionParser
-from BaseHTTPServer import HTTPServer, BaseHTTPRequestHandler
+from http.server import HTTPServer, BaseHTTPRequestHandler
 
 SALT = "Otus"
 ADMIN_LOGIN = "admin"
@@ -68,30 +68,30 @@ class ClientIDsField(object):
     pass
 
 
-class ClientsInterestsRequest(object):
-    client_ids = ClientIDsField(required=True)
-    date = DateField(required=False, nullable=True)
-
-
-class OnlineScoreRequest(object):
-    first_name = CharField(required=False, nullable=True)
-    last_name = CharField(required=False, nullable=True)
-    email = EmailField(required=False, nullable=True)
-    phone = PhoneField(required=False, nullable=True)
-    birthday = BirthDayField(required=False, nullable=True)
-    gender = GenderField(required=False, nullable=True)
-
-
-class MethodRequest(object):
-    account = CharField(required=False, nullable=True)
-    login = CharField(required=True, nullable=True)
-    token = CharField(required=True, nullable=True)
-    arguments = ArgumentsField(required=True, nullable=True)
-    method = CharField(required=True, nullable=False)
-
-    @property
-    def is_admin(self):
-        return self.login == ADMIN_LOGIN
+# class ClientsInterestsRequest(object):
+#     client_ids = ClientIDsField(required=True)
+#     date = DateField(required=False, nullable=True)
+#
+#
+# class OnlineScoreRequest(object):
+#     first_name = CharField(required=False, nullable=True)
+#     last_name = CharField(required=False, nullable=True)
+#     email = EmailField(required=False, nullable=True)
+#     phone = PhoneField(required=False, nullable=True)
+#     birthday = BirthDayField(required=False, nullable=True)
+#     gender = GenderField(required=False, nullable=True)
+#
+#
+# class MethodRequest(object):
+#     account = CharField(required=False, nullable=True)
+#     login = CharField(required=True, nullable=True)
+#     token = CharField(required=True, nullable=True)
+#     arguments = ArgumentsField(required=True, nullable=True)
+#     method = CharField(required=True, nullable=False)
+#
+#     @property
+#     def is_admin(self):
+#         return self.login == ADMIN_LOGIN
 
 
 def check_auth(request):
@@ -115,13 +115,14 @@ class MainHTTPHandler(BaseHTTPRequestHandler):
     }
     store = None
 
-    def get_request_id(self, headers):
-        return headers.get('HTTP_X_REQUEST_ID', uuid.uuid4().hex)
+    def get_request_id(self):
+        return self.headers.get('HTTP_X_REQUEST_ID', uuid.uuid4().hex)
 
     def do_POST(self):
         response, code = {}, OK
-        context = {"request_id": self.get_request_id(self.headers)}
+        context = {"request_id": self.get_request_id()}
         request = None
+        data_string = None
         try:
             data_string = self.rfile.read(int(self.headers['Content-Length']))
             request = json.loads(data_string)
@@ -149,7 +150,7 @@ class MainHTTPHandler(BaseHTTPRequestHandler):
             r = {"error": response or ERRORS.get(code, "Unknown Error"), "code": code}
         context.update(r)
         logging.info(context)
-        self.wfile.write(json.dumps(r))
+        self.wfile.write(json.dumps(r).encode())
         return
 
 
