@@ -9,6 +9,7 @@ import hashlib
 import uuid
 from optparse import OptionParser
 from http.server import HTTPServer, BaseHTTPRequestHandler
+import re
 
 SALT = "Otus"
 ADMIN_LOGIN = "admin"
@@ -49,49 +50,97 @@ class CharField(BaseField):
 
 class ArgumentsField(BaseField):
     def validate(self, payload):
-        print('--->', payload)
-        print('--->', type(payload))
         return isinstance(payload, dict)
 
 
 class EmailField(CharField):
-    pass
+    def validate(self, payload):
+        if not super().validate(payload):  # TODO это можно бы обобщить
+            return False
+        return '@' in payload
 
 
-class PhoneField(object):
-    pass
+class PhoneField(BaseField):
+    def validate(self, payload):
+        if not isinstance(payload, (str, int)):
+            return False
+        payload = str(payload)  # где же мой const
+        regexp = r'^7\d{10}$'
+        return bool(re.match(regexp, payload))
 
 
-class DateField(object):
-    pass
+class DateField(BaseField):
+    def validate(self, payload):
+        if not isinstance(payload, str):
+            return False
+        regexp = r'^\d{2}\.\d{2}\.\d{4}$'
+        return bool(re.match(regexp, payload))
 
 
-class BirthDayField(object):
-    pass
+class BirthDayField(DateField):
+    def validate(self, payload):
+        if not super().validate(payload):
+            return False
+        birth = datetime.datetime.strptime(payload, "%d.%m.%Y")
+        tdelta = datetime.datetime.now() - birth
+        return tdelta.days <= 365 * 70  # не будем углубляться в летоисчисление
 
 
-class GenderField(object):
-    pass
+class GenderField(BaseField):
+    def validate(self, payload):
+        return payload in GENDERS
 
 
-class ClientIDsField(object):
-    pass
+class ClientIDsField(BaseField):
+    def validate(self, payload):
+        if not isinstance(payload, (list, tuple)):
+            return False
+        return all(isinstance(x, int) for x in payload)
 
 
 class ClientsInterestsRequest(object):
-    pass
-#     client_ids = ClientIDsField(required=True)
-#     date = DateField(required=False, nullable=True)
+    # client_ids - массив числе, обязательно, не пустое
+    client_ids = ClientIDsField(
+        required=True,
+        nullable=False)
+
+    # date - дата в формате DD.MM. YYYY, опционально, может быть пустым
+    date = DateField(
+        required=False,
+        nullable=True)
 
 
 class OnlineScoreRequest(object):
     pass
-#     first_name = CharField(required=False, nullable=True)
-#     last_name = CharField(required=False, nullable=True)
-#     email = EmailField(required=False, nullable=True)
-#     phone = PhoneField(required=False, nullable=True)
-#     birthday = BirthDayField(required=False, nullable=True)
-#     gender = GenderField(required=False, nullable=True)
+    # first_name - строка, опционально, может быть пустым
+    first_name = CharField(
+        required=False,
+        nullable=True)
+
+    # last_name - строка, опционально, может быть пустым
+    last_name = CharField(
+        required=False,
+        nullable=True)
+
+    # email - строка, в которой есть @, опционально, может быть пустым
+    email = EmailField(
+        required=False,
+        nullable=True)
+
+    # phone - строка или число, длиной 11, начинается с 7, опционально, может быть пустым
+    phone = PhoneField(
+        required=False,
+        nullable=True)
+
+    # birthday - дата в формате DD.MM. YYYY, с которой прошло не больше 70 лет, опционально, может быть пустым
+    birthday = BirthDayField(
+        required=False,
+        nullable=True)
+
+    # gender - число 0, 1 или 2, опционально, может быть пустым
+    gender = GenderField(
+        required=False,
+        nullable=True)
 #
 #
 class MethodRequest(object):
@@ -157,6 +206,20 @@ def validate(body, schema):
         if attr in body and body[attr] and not field.validate(body[attr]):
             errors[attr] = f'Field validation failed: {attr}'
             continue
+    # присутствует хоть одна пара phone-email, first name-last name, gender-birthday с непустыми значениями.
+    if isinstance(schema, OnlineScoreRequest):
+        count_pairs = 0
+        for pair in [
+            ('phone', 'email'),
+            ('first_name', 'last_name'),
+            ('gender', 'birthday'),
+        ]:
+            check = True
+            for i in range(len(pair)):
+                check = check and (pair[i] in body and body[pair[i]])
+            if check:
+                break
+        errors['special'] = 'Missing mandatory pairs'
     if errors:
         raise ValidationError(errors)
 
