@@ -105,7 +105,7 @@ def check_auth(request):
 
 
 def method_handler(request, ctx, store):
-    response, code = None, None
+    response, code = request["body"], 200
     return response, code
 
 
@@ -121,20 +121,29 @@ class MainHTTPHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         response, code = {}, OK
         context = {"request_id": self.get_request_id()}
-        request = None
+        body = None
         data_string = None
         try:
-            data_string = self.rfile.read(int(self.headers['Content-Length']))
-            request = json.loads(data_string)
-        except:
+            if self.headers['Content-Type'] != 'application/json':
+                raise 'WANT JSON ONLY'
+            content_length = int(self.headers['Content-Length'])
+            data_string = self.rfile.read(content_length)
+            print('data --->', data_string)
+            body = json.loads(data_string)
+        except Exception as e:
+            print('PARSING ERROR = ', e)
+            logging.exception("Parsing error: %s" % e)
             code = BAD_REQUEST
 
-        if request:
+        if body:
             path = self.path.strip("/")
             logging.info("%s: %s %s" % (self.path, data_string, context["request_id"]))
             if path in self.router:
                 try:
-                    response, code = self.router[path]({"body": request, "headers": self.headers}, context, self.store)
+                    response, code = self.router[path](
+                        request={"body": body, "headers": self.headers},
+                        ctx=context,
+                        store=self.store)
                 except Exception as e:
                     logging.exception("Unexpected error: %s" % e)
                     code = INTERNAL_ERROR
