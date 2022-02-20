@@ -142,8 +142,8 @@ class OnlineScoreRequest(object):
     gender = GenderField(
         required=False,
         nullable=True)
-#
-#
+
+
 class MethodRequest(object):
     # account - строка, опционально, может быть пустым
     account = CharField(
@@ -169,17 +169,28 @@ class MethodRequest(object):
     method = CharField(
         required=True,
         nullable=False)
-#
-#     @property
-#     def is_admin(self):
-#         return self.login == ADMIN_LOGIN
+
+
+# пусть будет в отдельном классе
+class AuthProxy:
+    def __init__(self, account, login, token):
+        self.account = account
+        self.login = login
+        self.token = token
+
+    @property
+    def is_admin(self):
+        return self.login == ADMIN_LOGIN
 
 
 def check_auth(request):
+
     if request.is_admin:
-        digest = hashlib.sha512(datetime.datetime.now().strftime("%Y%m%d%H") + ADMIN_SALT).hexdigest()
+        key = datetime.datetime.now().strftime("%Y%m%d%H") + ADMIN_SALT
     else:
-        digest = hashlib.sha512(request.account + request.login + SALT).hexdigest()
+        key = request.account + request.login + SALT
+    key = key.encode()
+    digest = hashlib.sha512(key).hexdigest()
     if digest == request.token:
         return True
     return False
@@ -226,11 +237,18 @@ def validate(body, schema):
         raise ValidationError(errors)
 
 
-def online_score(arguments):
+def online_score(ctx, arguments):
+    allowed = {field for field in vars(OnlineScoreRequest) if not field.startswith('__')}
+    ctx['has'] = set.intersection(allowed, arguments)
+    print('has =', ctx['has'])
+    if ctx['is_admin']:
+        return {'score': 42}
     return {'score': get_score(store=None, **arguments)}  # strict валидация получилась из-за kwargs
 
 
-def clients_interests(arguments):
+def clients_interests(ctx, arguments):
+    ctx['nclients'] = len(arguments['client_ids'])
+    print('nclients =', ctx['nclients'])
     return {cid: get_interests(store=None, cid=cid) for cid in arguments['client_ids']}
 
 
@@ -243,13 +261,17 @@ def method_handler(request, ctx, store):
     body = request["body"]
     try:
         validate(body, MethodRequest)
+        auth = AuthProxy(account=body['account'], login=body['login'], token=body['token'])
+        if not check_auth(auth):
+            raise ValidationError(f'Unauthorised user')  # можно 401 или 403
+        ctx['is_admin'] = auth.is_admin
         method = body['method']
         arguments = body['arguments']
         if method not in method_map:
             raise ExecutionError(f'Unknown method: {method}')
         method, schema = method_map[method]
         validate(arguments, schema)
-        response, code = method(arguments=arguments), 200
+        response, code = method(ctx=ctx, arguments=arguments), 200
     except ValidationError as e:
         response, code = str(e), 422
     except ExecutionError as e:
