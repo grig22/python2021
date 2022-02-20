@@ -47,8 +47,11 @@ class CharField(BaseField):
         return isinstance(payload, str)
 
 
-class ArgumentsField(object):
-    pass
+class ArgumentsField(BaseField):
+    def validate(self, payload):
+        print('--->', payload)
+        print('--->', type(payload))
+        return isinstance(payload, dict)
 
 
 class EmailField(CharField):
@@ -90,11 +93,30 @@ class ClientIDsField(object):
 #
 #
 class MethodRequest(object):
-    account = CharField(required=False, nullable=True)
-#     login = CharField(required=True, nullable=True)
-#     token = CharField(required=True, nullable=True)
-#     arguments = ArgumentsField(required=True, nullable=True)
-    method = CharField(required=True, nullable=False)
+    # account - строка, опционально, может быть пустым
+    account = CharField(
+        required=False,
+        nullable=True)
+
+    # login - строка, обязательно, может быть пустым
+    login = CharField(
+        required=True,
+        nullable=True)
+
+    # token - строка, обязательно, может быть пустым
+    token = CharField(
+        required=True,
+        nullable=True)
+
+    # arguments - словарь (объект в терминах json), обязательно, может быть пустым
+    arguments = ArgumentsField(
+        required=True,
+        nullable=True)
+
+    # method - строка, обязательно, может быть пустым (не может)
+    method = CharField(
+        required=True,
+        nullable=False)
 #
 #     @property
 #     def is_admin(self):
@@ -112,22 +134,35 @@ def check_auth(request):
 
 
 def validate(body, schema):
-    print('body', body)
+    errors = dict()
     for attr, field in vars(schema).items():
-        if not attr.startswith('__'):
-            print('--->', attr, field)
-            print(field.required, field.nullable)
-            if field.required and attr not in body:
-                print('wheeeeeeeee')
-            if not field.nullable and attr in body and not body[attr]:
-                print('noooooooooo')
-    return True
+        if attr.startswith('__'):
+            continue
+        if field.required and attr not in body:
+            errors[attr] = f'Required field missing: {attr}'
+            continue
+        if not field.nullable and attr in body and not body[attr]:
+            errors[attr] = f'Field is null: {attr}'
+            continue
+        if attr in body and body[attr] and not field.validate(body[attr]):
+            errors[attr] = f'Field validation failed: {attr}'
+            continue
+    if errors:
+        raise Exception(errors)
 
 
 def method_handler(request, ctx, store):
     body = request["body"]
-    valid = validate(body, MethodRequest)  # TODO декоратор
-    response, code = request["body"], 200
+    try:
+        validate(body, MethodRequest)
+        # TODO validate method too
+    except Exception as e:
+        response, code = str(e), 422
+    else:
+        response, code = f'SUPER {request["body"]}', 200
+        pass  # TODO method call
+
+
     return response, code
 
 
@@ -147,13 +182,12 @@ class MainHTTPHandler(BaseHTTPRequestHandler):
         data_string = None
         try:
             if self.headers['Content-Type'] != 'application/json':
-                raise 'WANT JSON ONLY'
+                raise Exception('WANT JSON ONLY')
             content_length = int(self.headers['Content-Length'])
             data_string = self.rfile.read(content_length)
-            print('data --->', data_string)
+            # print('data --->', data_string)
             body = json.loads(data_string)
         except Exception as e:
-            print('PARSING ERROR = ', e)
             logging.exception("Parsing error: %s" % e)
             code = BAD_REQUEST
 
@@ -179,7 +213,7 @@ class MainHTTPHandler(BaseHTTPRequestHandler):
             r = {"response": response, "code": code}
         else:
             r = {"error": response or ERRORS.get(code, "Unknown Error"), "code": code}
-        context.update(r)
+        context.update(r)  # TODO
         logging.info(context)
         self.wfile.write(json.dumps(r).encode())
         return
