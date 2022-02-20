@@ -8,7 +8,7 @@ endpoint = 'method'
 url = f'{BASE_URL}:{PORT}/{endpoint}/'
 headers = {'Content-Type': 'application/json'}
 
-data = {"1111": "2222"}
+data = {'account': '', 'method': 'd'}
 
 res = requests.post(url=url, headers=headers, data=json.dumps(data))
 print(f'CODE = "{res.status_code}"')

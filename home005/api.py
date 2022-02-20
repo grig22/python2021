@@ -36,8 +36,15 @@ GENDERS = {
 }
 
 
-class CharField(object):
-    pass
+class BaseField:  # TODO абстрактный базовый класс
+    def __init__(self, required, nullable):
+        self.required = required
+        self.nullable = nullable
+
+
+class CharField(BaseField):
+    def validate(self, payload):
+        return isinstance(payload, str)
 
 
 class ArgumentsField(object):
@@ -82,12 +89,12 @@ class ClientIDsField(object):
 #     gender = GenderField(required=False, nullable=True)
 #
 #
-# class MethodRequest(object):
-#     account = CharField(required=False, nullable=True)
+class MethodRequest(object):
+    account = CharField(required=False, nullable=True)
 #     login = CharField(required=True, nullable=True)
 #     token = CharField(required=True, nullable=True)
 #     arguments = ArgumentsField(required=True, nullable=True)
-#     method = CharField(required=True, nullable=False)
+    method = CharField(required=True, nullable=False)
 #
 #     @property
 #     def is_admin(self):
@@ -104,7 +111,22 @@ def check_auth(request):
     return False
 
 
+def validate(body, schema):
+    print('body', body)
+    for attr, field in vars(schema).items():
+        if not attr.startswith('__'):
+            print('--->', attr, field)
+            print(field.required, field.nullable)
+            if field.required and attr not in body:
+                print('wheeeeeeeee')
+            if not field.nullable and attr in body and not body[attr]:
+                print('noooooooooo')
+    return True
+
+
 def method_handler(request, ctx, store):
+    body = request["body"]
+    valid = validate(body, MethodRequest)  # TODO декоратор
     response, code = request["body"], 200
     return response, code
 
