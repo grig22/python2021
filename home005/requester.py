@@ -11,7 +11,7 @@ headers = {'Content-Type': 'application/json'}
 data = {
     'account': 'Google Inc.',
     'login': 'username',
-    'method': 'whatever',
+    'method': 'clients_interests',
     'token': '123456',
     'arguments': {11: 22, 'what': 'nope'}
 }

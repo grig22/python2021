@@ -78,12 +78,14 @@ class ClientIDsField(object):
     pass
 
 
-# class ClientsInterestsRequest(object):
+class ClientsInterestsRequest(object):
+    pass
 #     client_ids = ClientIDsField(required=True)
 #     date = DateField(required=False, nullable=True)
-#
-#
-# class OnlineScoreRequest(object):
+
+
+class OnlineScoreRequest(object):
+    pass
 #     first_name = CharField(required=False, nullable=True)
 #     last_name = CharField(required=False, nullable=True)
 #     email = EmailField(required=False, nullable=True)
@@ -133,6 +135,14 @@ def check_auth(request):
     return False
 
 
+class ValidationError(Exception):
+    pass
+
+
+class ExecutionError(Exception):
+    pass
+
+
 def validate(body, schema):
     errors = dict()
     for attr, field in vars(schema).items():
@@ -148,21 +158,39 @@ def validate(body, schema):
             errors[attr] = f'Field validation failed: {attr}'
             continue
     if errors:
-        raise Exception(errors)
+        raise ValidationError(errors)
+
+
+def online_score(arguments):
+    pass
+
+
+def clients_interests(arguments):
+    return {"1": ["books", "hi-tech"], "2": ["pets", "tv"]}
 
 
 def method_handler(request, ctx, store):
+    # TODO декоратор схемы валидации на каждый метод
+    method_map = {
+        'online_score': (online_score, OnlineScoreRequest),
+        'clients_interests': (clients_interests, OnlineScoreRequest),
+    }
     body = request["body"]
     try:
         validate(body, MethodRequest)
-        # TODO validate method too
-    except Exception as e:
+        method = body['method']
+        arguments = body['arguments']
+        if method not in method_map:
+            raise ExecutionError(f'Unknown method: {method}')
+        method, schema = method_map[method]
+        validate(arguments, schema)
+        response, code = method(arguments=arguments), 200
+    except ValidationError as e:
         response, code = str(e), 422
-    else:
-        response, code = f'SUPER {request["body"]}', 200
-        pass  # TODO method call
-
-
+    except ExecutionError as e:
+        response, code = str(e), 400
+    except Exception as e:
+        response, code = str(e), 500
     return response, code
 
 
