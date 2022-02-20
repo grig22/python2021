@@ -204,6 +204,10 @@ class ExecutionError(Exception):
     pass
 
 
+class AuthError(Exception):
+    pass
+
+
 def validate(body, schema):
     errors = dict()
     # print('body', body)
@@ -263,7 +267,7 @@ def method_handler(request, ctx, store):
         validate(body, MethodRequest)
         auth = AuthProxy(account=body['account'], login=body['login'], token=body['token'])
         if not check_auth(auth):
-            raise ValidationError(f'Unauthorised user')  # можно 401 или 403
+            raise AuthError
         ctx['is_admin'] = auth.is_admin
         method = body['method']
         arguments = body['arguments']
@@ -276,6 +280,8 @@ def method_handler(request, ctx, store):
         response, code = str(e), 422
     except ExecutionError as e:
         response, code = str(e), 400
+    except AuthError:
+        response, code = 'Forbidden', 403
     except Exception as e:
         response, code = str(e), 500
     return response, code
