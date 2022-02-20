@@ -195,11 +195,11 @@ class ExecutionError(Exception):
 
 def validate(body, schema):
     errors = dict()
-    print('body', body)
+    # print('body', body)
     for attr, field in vars(schema).items():
         if attr.startswith('__'):
             continue
-        print('-->', attr)
+        # print('-->', attr)
         if field.required and attr not in body:
             errors[attr] = f'Required field missing: {attr}'
             continue
@@ -227,7 +227,7 @@ def validate(body, schema):
 
 
 def online_score(arguments):
-    return {'score': get_score(store=None, **arguments)}
+    return {'score': get_score(store=None, **arguments)}  # strict валидация получилась из-за kwargs
 
 
 def clients_interests(arguments):
