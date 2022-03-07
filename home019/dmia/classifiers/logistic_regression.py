@@ -1,11 +1,16 @@
 import numpy as np
 from scipy import sparse
-
+# https://github.com/huyouare/CS231n/blob/master/assignment1/cs231n/classifiers/linear_classifier.py
+# https://github.com/Dementiy/otus-python-0717/blob/master/homework07/logistic_regression.py
+# https://github.com/maxis42/CS231n/blob/master/assignment1/cs231n/classifiers/linear_classifier.py
 
 class LogisticRegression:
     def __init__(self):
         self.w = None
         self.loss_history = None
+
+    def sigmoid(self, z):
+        return 1.0 / (1.0 + np.exp(-z))
 
     def train(self, X, y, learning_rate=1e-3, reg=1e-5, num_iters=100, batch_size=200, verbose=False):
         """
@@ -46,8 +51,11 @@ class LogisticRegression:
             # Hint: Use np.random.choice to generate indices. Sampling with         #
             # replacement is faster than sampling without replacement.              #
             #########################################################################
-
-
+            X_batch = None
+            y_batch = None
+            rand_idx = np.random.choice(num_train, batch_size)
+            X_batch = X[:, rand_idx]
+            y_batch = y[rand_idx]
             #########################################################################
             #                       END OF YOUR CODE                                #
             #########################################################################
@@ -60,8 +68,7 @@ class LogisticRegression:
             # TODO:                                                                 #
             # Update the weights using the gradient and the learning rate.          #
             #########################################################################
-
-
+            self.w += -1 * learning_rate * gradW
             #########################################################################
             #                       END OF YOUR CODE                                #
             #########################################################################
@@ -91,9 +98,8 @@ class LogisticRegression:
         # Implement this method. Store the probabilities of classes in y_proba.   #
         # Hint: It might be helpful to use np.vstack and np.sum                   #
         ###########################################################################
-
-
-
+        predictions = self.sigmoid(X.dot(self.w.T))
+        y_proba = np.vstack([1 - predictions, predictions]).T
         ###########################################################################
         #                           END OF YOUR CODE                              #
         ###########################################################################
@@ -117,7 +123,7 @@ class LogisticRegression:
         # Implement this method. Store the predicted labels in y_pred.            #
         ###########################################################################
         y_proba = self.predict_proba(X, append_bias=True)
-        y_pred = ...
+        y_pred = y_proba.argmax(axis=1)
 
         ###########################################################################
         #                           END OF YOUR CODE                              #
@@ -137,16 +143,21 @@ class LogisticRegression:
         dw = np.zeros_like(self.w)  # initialize the gradient as zero
         loss = 0
         # Compute loss and gradient. Your code should not contain python loops.
-
+        h = self.sigmoid(X_batch.dot(self.w))
+        loss = -np.dot(y_batch, np.log(h)) - np.dot((1 - y_batch), np.log(1.0 - h))
+        dw = (h - y_batch) * X_batch
 
         # Right now the loss is a sum over all training examples, but we want it
         # to be an average instead so we divide by num_train.
         # Note that the same thing must be done with gradient.
-
+        num_train = X_batch.shape[0]
+        loss = loss / num_train
+        dw = dw / num_train
 
         # Add regularization to the loss and gradient.
         # Note that you have to exclude bias term in regularization.
-
+        loss += (reg / (2.0 * num_train)) * np.dot(self.w[:-1], self.w[:-1])
+        dw[:-1] = dw[:-1] + (reg * self.w[:-1]) / num_train
 
         return loss, dw
 

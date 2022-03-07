@@ -35,8 +35,6 @@ def grad_check_sparse(f, x, analytic_grad, num_checks):
   in this dimensions.
   """
     h = 1e-5
-
-    # for i in xrange(num_checks):
     for i in range(num_checks):
         ix = tuple([randrange(m) for m in x.shape])
 
