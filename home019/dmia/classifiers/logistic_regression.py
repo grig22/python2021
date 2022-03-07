@@ -53,9 +53,9 @@ class LogisticRegression:
             #########################################################################
             X_batch = None
             y_batch = None
-            rand_idx = np.random.choice(num_train, batch_size)
-            X_batch = X[:, rand_idx]
-            y_batch = y[rand_idx]
+            indices = np.random.choice(num_train, batch_size)
+            X_batch = X[indices, :]
+            y_batch = y[indices]
             #########################################################################
             #                       END OF YOUR CODE                                #
             #########################################################################
