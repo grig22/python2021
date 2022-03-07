@@ -7,8 +7,7 @@ class LogisticRegression:
         self.w = None
         self.loss_history = None
 
-    def train(self, X, y, learning_rate=1e-3, reg=1e-5, num_iters=100,
-              batch_size=200, verbose=False):
+    def train(self, X, y, learning_rate=1e-3, reg=1e-5, num_iters=100, batch_size=200, verbose=False):
         """
         Train this classifier using stochastic gradient descent.
 
