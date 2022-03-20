@@ -12,7 +12,7 @@ class LogisticRegression:
     def sigmoid(self, z):
         return 1.0 / (1.0 + np.exp(-z))
 
-    def train(self, X, y, learning_rate=1e-3, reg=1e-5, num_iters=100, batch_size=200, verbose=False):
+    def train(self, X, y, learning_rate=1e-3, reg=1e-5, num_iters=1000, batch_size=200, verbose=False):
         """
         Train this classifier using stochastic gradient descent.
 
@@ -131,6 +131,8 @@ class LogisticRegression:
         return y_pred
 
     def loss(self, X_batch, y_batch, reg):
+        return svm_loss_vectorized(self.w, X_batch, y_batch, reg)
+
         """Logistic Regression loss function
         Inputs:
         - X: N x D array of data. Data are D-dimensional rows
@@ -164,3 +166,50 @@ class LogisticRegression:
     @staticmethod
     def append_biases(X):
         return sparse.hstack((X, np.ones(X.shape[0])[:, np.newaxis])).tocsr()
+
+
+def svm_loss_vectorized(W, X, y, reg):
+  """
+  Structured SVM loss function, vectorized implementation.
+  Inputs and outputs are the same as svm_loss_naive.
+  """
+  loss = 0.0
+  dW = np.zeros(W.shape) # initialize the gradient as zero
+
+  #############################################################################
+  # TODO:                                                                     #
+  # Implement a vectorized version of the structured SVM loss, storing the    #
+  # result in loss.                                                           #
+  #############################################################################
+  num_train = X.shape[0]
+
+  loss = 0.0
+  scores = X.dot(W) # (N, C)
+  correct_class_scores = scores[range(num_train), y] # (N,)
+  margins = scores - correct_class_scores[:,None] + 1 # (N, C)
+  margins[range(num_train), y] = 0
+  loss = np.sum(margins[margins > 0]) / num_train + reg * np.sum(W * W)
+  #############################################################################
+  #                             END OF YOUR CODE                              #
+  #############################################################################
+
+  #############################################################################
+  # TODO:                                                                     #
+  # Implement a vectorized version of the gradient for the structured SVM     #
+  # loss, storing the result in dW.                                           #
+  #                                                                           #
+  # Hint: Instead of computing the gradient from scratch, it may be easier    #
+  # to reuse some of the intermediate values that you used to compute the     #
+  # loss.                                                                     #
+  #############################################################################
+  positive_margins = np.zeros(margins.shape) # (N, C)
+  positive_margins[margins > 0] = 1
+  positive_margins_cnts = np.sum(positive_margins, axis=1) # (N,)
+  positive_margins[range(num_train), y] -= positive_margins_cnts
+  dW = np.dot(X.T, positive_margins) # (N, D).T x (N, C) = (D, C)
+  dW = dW / num_train + reg * 2 * W
+  #############################################################################
+  #                             END OF YOUR CODE                              #
+  #############################################################################
+
+  return loss, dW
