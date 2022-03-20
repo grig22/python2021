@@ -132,16 +132,16 @@ class LogisticRegression:
 
     def loss(self, X_batch, y_batch, reg):
         return svm_loss_vectorized(self.w, X_batch, y_batch, reg)
-
-        """Logistic Regression loss function
-        Inputs:
-        - X: N x D array of data. Data are D-dimensional rows
-        - y: 1-dimensional array of length N with labels 0-1, for 2 classes
-        Returns:
-        a tuple of:
-        - loss as single float
-        - gradient with respect to weights w; an array of same shape as w
-        """
+        #
+        # """Logistic Regression loss function
+        # Inputs:
+        # - X: N x D array of data. Data are D-dimensional rows
+        # - y: 1-dimensional array of length N with labels 0-1, for 2 classes
+        # Returns:
+        # a tuple of:
+        # - loss as single float
+        # - gradient with respect to weights w; an array of same shape as w
+        # """
         dw = np.zeros_like(self.w)  # initialize the gradient as zero
         loss = 0
         # Compute loss and gradient. Your code should not contain python loops.
