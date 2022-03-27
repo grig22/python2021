@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 import gzip
 import re
@@ -28,8 +28,7 @@ def split_filenames(names):
     for name in names:
         try:
             result = prog.match(name)
-            dd = result.group(1)
-            date = datetime.date.fromisoformat(f'{dd[0:4]}-{dd[4:6]}-{dd[6:8]}')  # TODO 5. datetime.strptime
+            date = datetime.datetime.strptime(result.group(1), '%Y%m%d')
             extension = result.group(2)
             if extension not in ['gz', '']:
                 continue
@@ -43,10 +42,9 @@ def get_last_log(log_dir):
     logging.info(f'Смотрим логи в каталоге "{log_dir}"')
     if not os.path.isdir(log_dir):
         raise Exception(f'Нету каталога "{log_dir}"')
-    files = sorted(split_filenames(os.listdir(log_dir)), key=lambda x: x.date, reverse=True)  # TODO 6. удобнее заюзать функцию max
-    if not files:
-        raise Exception(f'Нету лога в каталоге "{log_dir}"')
-    fresh = files[0]
+    if not (names := os.listdir(log_dir)):
+        raise Exception(f'Нету логов в каталоге "{log_dir}"')
+    fresh = max(split_filenames(names), key=lambda x: x.date)
     logging.info(f'Обнаружен свежий лог "{fresh.name}"')
     return fresh
 
