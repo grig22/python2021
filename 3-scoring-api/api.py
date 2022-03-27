@@ -21,8 +21,8 @@ ADMIN_SALT = "42"
 # BAD_REQUEST = 400
 # FORBIDDEN = 403
 # NOT_FOUND = 404
-# INVALID_REQUEST = 422
-# INTERNAL_ERROR = 500
+# INVALID_REQUEST = 422  # UNPROCESSABLE_ENTITY
+# INTERNAL_ERROR = 500  # INTERNAL_SERVER_ERROR
 ERRORS = {
     hs.BAD_REQUEST: "Bad Request",
     hs.FORBIDDEN: "Forbidden",
@@ -101,12 +101,29 @@ class ClientIDsField(BaseField):
         return all(isinstance(x, int) for x in payload)
 
 
-class ClientsInterestsRequest(object):
+class BaseSchema:
+    @classmethod
+    def validate(cls, body, errors):
+        for attr, field in vars(cls).items():
+            if not isinstance(field, BaseField):
+                continue
+            if field.required and attr not in body:
+                errors[attr] = f'Required field missing: {attr}'
+                continue
+            if not field.nullable and attr in body and not body[attr]:
+                errors[attr] = f'Field is null: {attr}'
+                continue
+            if attr in body and body[attr] and not field.validate(body[attr]):
+                errors[attr] = f'Field validation failed: {attr}'
+                continue
+
+
+class ClientsInterestsRequest(BaseSchema):
     client_ids = ClientIDsField(required=True, nullable=False)
     date = DateField(required=False, nullable=True)
 
 
-class OnlineScoreRequest(object):
+class OnlineScoreRequest(BaseSchema):
     first_name = CharField(required=False, nullable=True)
     last_name = CharField(required=False, nullable=True)
     email = EmailField(required=False, nullable=True)
@@ -114,17 +131,25 @@ class OnlineScoreRequest(object):
     birthday = BirthDayField(required=False, nullable=True)
     gender = GenderField(required=False, nullable=True)
 
+    @classmethod
+    def validate(cls, body, errors):
+        super().validate(body, errors)
+        for pair in [('phone', 'email'), ('first_name', 'last_name'), ('gender', 'birthday')]:
+            check = True
+            for i in range(len(pair)):
+                check = check and (pair[i] in body and body[pair[i]])
+            if check:
+                return
+        errors['special'] = 'Missing mandatory pairs'
 
-class MethodRequest(object):
+
+class MethodRequest(BaseSchema):
     account = CharField(required=False, nullable=True)
     login = CharField(required=True, nullable=True)
     token = CharField(required=True, nullable=True)
     arguments = ArgumentsField(required=True, nullable=True)
     method = CharField(required=True, nullable=False)
 
-
-# пусть будет в отдельном классе
-class AuthProxy:  # TODO 2. https://www.youtube.com/watch?v=o9pEzgHorH0 Stop Writing Classes
     def __init__(self, account, login, token):
         self.account = account
         self.login = login
@@ -136,7 +161,6 @@ class AuthProxy:  # TODO 2. https://www.youtube.com/watch?v=o9pEzgHorH0 Stop Wri
 
 
 def check_auth(request):
-
     if request.is_admin:
         key = datetime.datetime.now().strftime("%Y%m%d%H") + ADMIN_SALT
     else:
@@ -154,31 +178,7 @@ class ValidationError(Exception):
 
 def validate(body, schema):
     errors = dict()
-    for attr, field in vars(schema).items():
-        if attr.startswith('__'):  # TODO 6. а если я захочу как атрибут класса не Field* определить, то что делать?
-            continue
-        if field.required and attr not in body:
-            errors[attr] = f'Required field missing: {attr}'
-            continue
-        if not field.nullable and attr in body and not body[attr]:
-            errors[attr] = f'Field is null: {attr}'
-            continue
-        if attr in body and body[attr] and not field.validate(body[attr]):
-            errors[attr] = f'Field validation failed: {attr}'
-            continue
-    # присутствует хоть одна пара phone-email, first name-last name, gender-birthday с непустыми значениями.
-    if isinstance(schema, OnlineScoreRequest):  # TODO 7. наверное стоило базовую логику валидации описать в родительском классе, а потом расширить ее в OnlineScoreRequest
-        for pair in [
-            ('phone', 'email'),
-            ('first_name', 'last_name'),
-            ('gender', 'birthday'),
-        ]:
-            check = True
-            for i in range(len(pair)):
-                check = check and (pair[i] in body and body[pair[i]])
-            if check:
-                break
-        errors['special'] = 'Missing mandatory pairs'
+    schema.validate(body, errors)
     if errors:
         raise ValidationError(errors)
 
@@ -205,7 +205,7 @@ def method_handler(request, ctx, store):
     body = request["body"]
     try:
         validate(body, MethodRequest)
-        auth = AuthProxy(account=body['account'], login=body['login'], token=body['token'])
+        auth = MethodRequest(account=body['account'], login=body['login'], token=body['token'])
         if not check_auth(auth):
             return 'Auth error', hs.FORBIDDEN
         ctx['is_admin'] = auth.is_admin
