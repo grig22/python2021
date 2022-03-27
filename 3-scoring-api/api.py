@@ -67,7 +67,7 @@ class PhoneField(BaseField):
             return False
         payload = str(payload)  # где же мой const
         regexp = r'^7\d{10}$'
-        return bool(re.match(regexp, payload))
+        return bool(re.match(regexp, payload))  # TODO 0. недостаточно возвращать безликий bool, пользователю лучше в сообщении об ошибке рассказать в чем именно была проблема
 
 
 class DateField(BaseField):
@@ -100,7 +100,7 @@ class ClientIDsField(BaseField):
 
 
 class ClientsInterestsRequest(object):
-    # client_ids - массив числе, обязательно, не пустое
+    # client_ids - массив числе, обязательно, не пустое  # TODO 1. эти комменты и размазывание Field'ов на несколько строк совсем читаемость не повышают, может все же вернем первоначальный вид?
     client_ids = ClientIDsField(
         required=True,
         nullable=False)
@@ -172,7 +172,7 @@ class MethodRequest(object):
 
 
 # пусть будет в отдельном классе
-class AuthProxy:
+class AuthProxy:  # TODO 2. https://www.youtube.com/watch?v=o9pEzgHorH0 Stop Writing Classes
     def __init__(self, account, login, token):
         self.account = account
         self.login = login
@@ -212,7 +212,7 @@ def validate(body, schema):
     errors = dict()
     # print('body', body)
     for attr, field in vars(schema).items():
-        if attr.startswith('__'):
+        if attr.startswith('__'):  # TODO 6. а если я захочу как атрибут класса не Field* определить, то что делать?
             continue
         # print('-->', attr)
         if field.required and attr not in body:
@@ -225,7 +225,7 @@ def validate(body, schema):
             errors[attr] = f'Field validation failed: {attr}'
             continue
     # присутствует хоть одна пара phone-email, first name-last name, gender-birthday с непустыми значениями.
-    if isinstance(schema, OnlineScoreRequest):
+    if isinstance(schema, OnlineScoreRequest):  # TODO 7. наверное стоило базовую логику валидации описать в родительском классе, а потом расширить ее в OnlineScoreRequest
         for pair in [
             ('phone', 'email'),
             ('first_name', 'last_name'),
@@ -252,7 +252,7 @@ def online_score(ctx, arguments):
 
 def clients_interests(ctx, arguments):
     ctx['nclients'] = len(arguments['client_ids'])
-    print('nclients =', ctx['nclients'])
+    print('nclients =', ctx['nclients'])  # TODO 5. полагаю, что это лишнее
     return {cid: get_interests(store=None, cid=cid) for cid in arguments['client_ids']}
 
 
@@ -281,7 +281,7 @@ def method_handler(request, ctx, store):
     except ExecutionError as e:
         response, code = str(e), 400
     except AuthError:
-        response, code = 'Forbidden', 403
+        response, code = 'Forbidden', 403  # TODO 4. (1) специально объявлены переменные, чтобы магические числа не писать (2) зачем этим эксепшены: AuthError, ExecutionError? вместо raise с таким же успехом можно return написать
     except Exception as e:
         response, code = str(e), 500
     return response, code
@@ -306,7 +306,7 @@ class MainHTTPHandler(BaseHTTPRequestHandler):
                 raise Exception('WANT JSON ONLY')
             content_length = int(self.headers['Content-Length'])
             data_string = self.rfile.read(content_length)
-            # print('data --->', data_string)
+            # print('data --->', data_string)  # TODO 3. давайте ненужное удалим
             body = json.loads(data_string)
         except Exception as e:
             logging.exception("Parsing error: %s" % e)
