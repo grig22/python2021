@@ -1,7 +1,7 @@
 #!/usr/bin/env python3.9
 # -*- coding: utf-8 -*-
 
-import abc
+# import abc
 import json
 import datetime
 import logging
@@ -11,22 +11,24 @@ from optparse import OptionParser
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import re
 from scoring import get_score, get_interests
+# https://docs.python.org/3/library/http.html
+from http import HTTPStatus as hs
 
 SALT = "Otus"
 ADMIN_LOGIN = "admin"
 ADMIN_SALT = "42"
-OK = 200
-BAD_REQUEST = 400
-FORBIDDEN = 403
-NOT_FOUND = 404
-INVALID_REQUEST = 422
-INTERNAL_ERROR = 500
+# OK = 200
+# BAD_REQUEST = 400
+# FORBIDDEN = 403
+# NOT_FOUND = 404
+# INVALID_REQUEST = 422  # UNPROCESSABLE_ENTITY
+# INTERNAL_ERROR = 500  # INTERNAL_SERVER_ERROR
 ERRORS = {
-    BAD_REQUEST: "Bad Request",
-    FORBIDDEN: "Forbidden",
-    NOT_FOUND: "Not Found",
-    INVALID_REQUEST: "Invalid Request",
-    INTERNAL_ERROR: "Internal Server Error",
+    hs.BAD_REQUEST: "Bad Request",
+    hs.FORBIDDEN: "Forbidden",
+    hs.NOT_FOUND: "Not Found",
+    hs.UNPROCESSABLE_ENTITY: "Invalid Request",
+    hs.INTERNAL_SERVER_ERROR: "Internal Server Error",
 }
 UNKNOWN = 0
 MALE = 1
@@ -67,6 +69,9 @@ class PhoneField(BaseField):
             return False
         payload = str(payload)  # где же мой const
         regexp = r'^7\d{10}$'
+        # TODO 0. недостаточно возвращать безликий bool, пользователю лучше в сообщении об ошибке рассказать в чем именно была проблема
+        # после того, как напишу модульные тесты, буду менять все функции валидации
+        # но, на мой взгляд, требования к заполнению полей пользователь может и в документации почитать
         return bool(re.match(regexp, payload))
 
 
@@ -99,80 +104,55 @@ class ClientIDsField(BaseField):
         return all(isinstance(x, int) for x in payload)
 
 
-class ClientsInterestsRequest(object):
-    # client_ids - массив числе, обязательно, не пустое
-    client_ids = ClientIDsField(
-        required=True,
-        nullable=False)
-
-    # date - дата в формате DD.MM. YYYY, опционально, может быть пустым
-    date = DateField(
-        required=False,
-        nullable=True)
-
-
-class OnlineScoreRequest(object):
-    pass
-    # first_name - строка, опционально, может быть пустым
-    first_name = CharField(
-        required=False,
-        nullable=True)
-
-    # last_name - строка, опционально, может быть пустым
-    last_name = CharField(
-        required=False,
-        nullable=True)
-
-    # email - строка, в которой есть @, опционально, может быть пустым
-    email = EmailField(
-        required=False,
-        nullable=True)
-
-    # phone - строка или число, длиной 11, начинается с 7, опционально, может быть пустым
-    phone = PhoneField(
-        required=False,
-        nullable=True)
-
-    # birthday - дата в формате DD.MM. YYYY, с которой прошло не больше 70 лет, опционально, может быть пустым
-    birthday = BirthDayField(
-        required=False,
-        nullable=True)
-
-    # gender - число 0, 1 или 2, опционально, может быть пустым
-    gender = GenderField(
-        required=False,
-        nullable=True)
+class BaseSchema:
+    @classmethod
+    def validate(cls, body, errors):
+        for attr, field in vars(cls).items():
+            if not isinstance(field, BaseField):
+                continue
+            if field.required and attr not in body:
+                errors[attr] = f'Required field missing: {attr}'
+                continue
+            if not field.nullable and attr in body and not body[attr]:
+                errors[attr] = f'Field is null: {attr}'
+                continue
+            if attr in body and body[attr] and not field.validate(body[attr]):
+                errors[attr] = f'Field validation failed: {attr}'
+                continue
 
 
-class MethodRequest(object):
-    # account - строка, опционально, может быть пустым
-    account = CharField(
-        required=False,
-        nullable=True)
-
-    # login - строка, обязательно, может быть пустым
-    login = CharField(
-        required=True,
-        nullable=True)
-
-    # token - строка, обязательно, может быть пустым
-    token = CharField(
-        required=True,
-        nullable=True)
-
-    # arguments - словарь (объект в терминах json), обязательно, может быть пустым
-    arguments = ArgumentsField(
-        required=True,
-        nullable=True)
-
-    # method - строка, обязательно, может быть пустым (не может)
-    method = CharField(
-        required=True,
-        nullable=False)
+class ClientsInterestsRequest(BaseSchema):
+    client_ids = ClientIDsField(required=True, nullable=False)
+    date = DateField(required=False, nullable=True)
 
 
-# пусть будет в отдельном классе
-class AuthProxy:
+class OnlineScoreRequest(BaseSchema):
+    first_name = CharField(required=False, nullable=True)
+    last_name = CharField(required=False, nullable=True)
+    email = EmailField(required=False, nullable=True)
+    phone = PhoneField(required=False, nullable=True)
+    birthday = BirthDayField(required=False, nullable=True)
+    gender = GenderField(required=False, nullable=True)
+
+    @classmethod
+    def validate(cls, body, errors):
+        super().validate(body, errors)
+        for pair in [('phone', 'email'), ('first_name', 'last_name'), ('gender', 'birthday')]:
+            check = True
+            for i in range(len(pair)):
+                check = check and (pair[i] in body and body[pair[i]])
+            if check:
+                return
+        errors['special'] = 'Missing mandatory pairs'
+
+
+class MethodRequest(BaseSchema):
+    account = CharField(required=False, nullable=True)
+    login = CharField(required=True, nullable=True)
+    token = CharField(required=True, nullable=True)
+    arguments = ArgumentsField(required=True, nullable=True)
+    method = CharField(required=True, nullable=False)
+
     def __init__(self, account, login, token):
         self.account = account
         self.login = login
@@ -184,7 +164,6 @@ class AuthProxy:
 
 
 def check_auth(request):
-
     if request.is_admin:
         key = datetime.datetime.now().strftime("%Y%m%d%H") + ADMIN_SALT
     else:
@@ -200,43 +179,9 @@ class ValidationError(Exception):
     pass
 
 
-class ExecutionError(Exception):
-    pass
-
-
-class AuthError(Exception):
-    pass
-
-
 def validate(body, schema):
     errors = dict()
-    # print('body', body)
-    for attr, field in vars(schema).items():
-        if attr.startswith('__'):
-            continue
-        # print('-->', attr)
-        if field.required and attr not in body:
-            errors[attr] = f'Required field missing: {attr}'
-            continue
-        if not field.nullable and attr in body and not body[attr]:
-            errors[attr] = f'Field is null: {attr}'
-            continue
-        if attr in body and body[attr] and not field.validate(body[attr]):
-            errors[attr] = f'Field validation failed: {attr}'
-            continue
-    # присутствует хоть одна пара phone-email, first name-last name, gender-birthday с непустыми значениями.
-    if isinstance(schema, OnlineScoreRequest):
-        for pair in [
-            ('phone', 'email'),
-            ('first_name', 'last_name'),
-            ('gender', 'birthday'),
-        ]:
-            check = True
-            for i in range(len(pair)):
-                check = check and (pair[i] in body and body[pair[i]])
-            if check:
-                break
-        errors['special'] = 'Missing mandatory pairs'
+    schema.validate(body, errors)
     if errors:
         raise ValidationError(errors)
 
@@ -244,7 +189,6 @@ def validate(body, schema):
 def online_score(ctx, arguments):
     allowed = {field for field in vars(OnlineScoreRequest) if not field.startswith('__')}
     ctx['has'] = set.intersection(allowed, arguments)
-    print('has =', ctx['has'])
     if ctx['is_admin']:
         return {'score': 42}
     return {'score': get_score(store=None, **arguments)}  # strict валидация получилась из-за kwargs
@@ -252,7 +196,6 @@ def online_score(ctx, arguments):
 
 def clients_interests(ctx, arguments):
     ctx['nclients'] = len(arguments['client_ids'])
-    print('nclients =', ctx['nclients'])
     return {cid: get_interests(store=None, cid=cid) for cid in arguments['client_ids']}
 
 
@@ -265,26 +208,21 @@ def method_handler(request, ctx, store):
     body = request["body"]
     try:
         validate(body, MethodRequest)
-        auth = AuthProxy(account=body['account'], login=body['login'], token=body['token'])
+        auth = MethodRequest(account=body['account'], login=body['login'], token=body['token'])
         if not check_auth(auth):
-            raise AuthError
+            return 'Auth error', hs.FORBIDDEN
         ctx['is_admin'] = auth.is_admin
         method = body['method']
         arguments = body['arguments']
         if method not in method_map:
-            raise ExecutionError(f'Unknown method: {method}')
+            return f'Unknown method: {method}', hs.BAD_REQUEST
         method, schema = method_map[method]
         validate(arguments, schema)
-        response, code = method(ctx=ctx, arguments=arguments), 200
-    except ValidationError as e:
-        response, code = str(e), 422
-    except ExecutionError as e:
-        response, code = str(e), 400
-    except AuthError:
-        response, code = 'Forbidden', 403
-    except Exception as e:
-        response, code = str(e), 500
-    return response, code
+        return method(ctx=ctx, arguments=arguments), hs.OK
+    except ValidationError as ex:
+        return f'Validation error: {ex}', hs.UNPROCESSABLE_ENTITY
+    except Exception as ex:
+        return f'Unknown error {ex}', hs.INTERNAL_SERVER_ERROR
 
 
 class MainHTTPHandler(BaseHTTPRequestHandler):
@@ -297,7 +235,7 @@ class MainHTTPHandler(BaseHTTPRequestHandler):
         return self.headers.get('HTTP_X_REQUEST_ID', uuid.uuid4().hex)
 
     def do_POST(self):
-        response, code = {}, OK
+        response, code = {}, hs.OK
         context = {"request_id": self.get_request_id()}
         body = None
         data_string = None
@@ -306,11 +244,10 @@ class MainHTTPHandler(BaseHTTPRequestHandler):
                 raise Exception('WANT JSON ONLY')
             content_length = int(self.headers['Content-Length'])
             data_string = self.rfile.read(content_length)
-            # print('data --->', data_string)
             body = json.loads(data_string)
         except Exception as e:
             logging.exception("Parsing error: %s" % e)
-            code = BAD_REQUEST
+            code = hs.BAD_REQUEST
 
         if body:
             path = self.path.strip("/")
@@ -323,9 +260,9 @@ class MainHTTPHandler(BaseHTTPRequestHandler):
                         store=self.store)
                 except Exception as e:
                     logging.exception("Unexpected error: %s" % e)
-                    code = INTERNAL_ERROR
+                    code = hs.INTERNAL_SERVER_ERROR
             else:
-                code = NOT_FOUND
+                code = hs.NOT_FOUND
 
         self.send_response(code)
         self.send_header("Content-Type", "application/json")
