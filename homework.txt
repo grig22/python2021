@@ -1,0 +1,44 @@
+1 Advanced basics. Протоколы
+ДЗ-1: Log Analyzer
+
+3 Internals. Виртуальная машина
+ДЗ-2: CPython (опционально)
+
+5 OOP. Объектная модель
+ДЗ-3.0: Scoring API
+
+7 Testing. Дизайн тестов
+ДЗ-3.1: API Testing
+
+9 Automatization. Сетевое взаимодействие
+ДЗ-4: Web Server
+
+11 Dynamic Web
+ДЗ-5: uWSGI Daemon/ Django Tutorial (опционально)
+
+13 Django. ORM и "зло"
+ДЗ-6.0: Django project
+
+15 Django. Views
+ДЗ-6.1: Django project
+
+17 REST API. Know-how
+ДЗ-6.2: Django REST API (опционально)
+
+19 Основы NumPy
+ДЗ-7: LogRegression
+
+21 Pandas. Машинное обучение и продакшен
+ДЗ-8: Open Data Analysis (опционально)
+
+23 Concurrency. Потоки
+ДЗ-9: MemcLoad
+
+25 C extensions
+ДЗ-10: Protobuf (de)serializer (опционально)
+
+ДЗ-11: YCrawler
+
+ДЗ-12: MemcLoad v2
+
+Проектная работа
