@@ -14,12 +14,12 @@ import logging
 def split_filenames(names):
     regexp = r'nginx-access-ui\.log-(\d+).?(\S*)'
     prog = re.compile(regexp)
-    Filename = collections.namedtuple('Filename', 'name date extension')
+    Filename = collections.namedtuple('Filename', 'name date extension')  # TODO 4. это аналогично объявлению класса и должно быть в шапке скрипта
     for name in names:
         try:
             result = prog.match(name)
             dd = result.group(1)
-            date = datetime.date.fromisoformat(f'{dd[0:4]}-{dd[4:6]}-{dd[6:8]}')
+            date = datetime.date.fromisoformat(f'{dd[0:4]}-{dd[4:6]}-{dd[6:8]}')  # TODO 5. datetime.strptime
             extension = result.group(2)
             if extension not in ['gz', '']:
                 continue
@@ -33,7 +33,7 @@ def get_last_log(log_dir):
     logging.info(f'Смотрим логи в каталоге "{log_dir}"')
     if not os.path.isdir(log_dir):
         raise Exception(f'Нету каталога "{log_dir}"')
-    files = sorted(split_filenames(os.listdir(log_dir)), key=lambda x: x.date, reverse=True)
+    files = sorted(split_filenames(os.listdir(log_dir)), key=lambda x: x.date, reverse=True)  # TODO 6. удобнее заюзать функцию max
     if not files:
         raise Exception(f'Нету лога в каталоге "{log_dir}"')
     fresh = files[0]
@@ -53,7 +53,7 @@ def push(collector, data):
     if url not in collector.keys():
         collector[url] = list()
     collector[url].append(time)
-    pass
+    pass  # TODO 7. лишнее, давайте удалим
 
 
 # log_format ui_short
@@ -124,17 +124,17 @@ def save_report(report_data, report_dir, report_fullname):
 
 
 def merge_config(config, filename):
-    if os.stat(filename).st_size == 0:
+    if os.stat(filename).st_size == 0:  # TODO 2. os.path.getsize
         return
     with open(filename, mode='rt', encoding="utf-8") as ff:
         conf_json = json.load(ff)
         for k in conf_json:
-            if k in config:
+            if k in config:  # TODO 3. можно и без цикла один словарь из другого обновить
                 config[k] = conf_json[k]
 
 
 def main():
-    config = {
+    config = {  # TODO 1. подразумевалось, что дефолтный конфиг все же дислоцируется в шапке
         "REPORT_SIZE": 1000,
         "REPORT_DIR": "./reports",
         "LOG_DIR": "./log",
@@ -144,7 +144,7 @@ def main():
     collector = dict()
 
     try:
-        if len(sys.argv) >= 2 and sys.argv[1] == '--config':
+        if len(sys.argv) >= 2 and sys.argv[1] == '--config':  # TODO 0. давайте argparse использовать
             merge_config(config, sys.argv[2])
 
         logging.basicConfig(
