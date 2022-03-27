@@ -4,17 +4,27 @@ import gzip
 import re
 import statistics
 import json
-import sys
+# import sys
 import os
 import datetime
 import collections
 import logging
+import argparse
+
+GLOBAL_CONFIG = {
+    "REPORT_SIZE": 1000,
+    "REPORT_DIR": "./reports",
+    "LOG_DIR": "./log",
+    "MAX_ERROR_PERCENT": 2,
+    "MY_LOG_FILENAME": "my.log",
+}
+
+Filename = collections.namedtuple('Filename', 'name date extension')
 
 
 def split_filenames(names):
     regexp = r'nginx-access-ui\.log-(\d+).?(\S*)'
     prog = re.compile(regexp)
-    Filename = collections.namedtuple('Filename', 'name date extension')  # TODO 4. это аналогично объявлению класса и должно быть в шапке скрипта
     for name in names:
         try:
             result = prog.match(name)
@@ -53,7 +63,6 @@ def push(collector, data):
     if url not in collector.keys():
         collector[url] = list()
     collector[url].append(time)
-    pass  # TODO 7. лишнее, давайте удалим
 
 
 # log_format ui_short
@@ -124,41 +133,32 @@ def save_report(report_data, report_dir, report_fullname):
 
 
 def merge_config(config, filename):
-    if os.stat(filename).st_size == 0:  # TODO 2. os.path.getsize
-        return
-    with open(filename, mode='rt', encoding="utf-8") as ff:
-        conf_json = json.load(ff)
-        for k in conf_json:
-            if k in config:  # TODO 3. можно и без цикла один словарь из другого обновить
-                config[k] = conf_json[k]
+    if os.path.getsize(filename):
+        with open(filename, mode='rt', encoding="utf-8") as ff:
+            config.update(json.load(ff))
 
 
 def main():
-    config = {  # TODO 1. подразумевалось, что дефолтный конфиг все же дислоцируется в шапке
-        "REPORT_SIZE": 1000,
-        "REPORT_DIR": "./reports",
-        "LOG_DIR": "./log",
-        "MAX_ERROR_PERCENT": 2,
-        "MY_LOG_FILENAME": "my.log",
-    }
     collector = dict()
 
     try:
-        if len(sys.argv) >= 2 and sys.argv[1] == '--config':  # TODO 0. давайте argparse использовать
-            merge_config(config, sys.argv[2])
+        parser = argparse.ArgumentParser()
+        parser.add_argument('--config')
+        if args := parser.parse_args():
+            merge_config(GLOBAL_CONFIG, args.config)
 
         logging.basicConfig(
             format='[%(asctime)s] %(levelname).1s %(message)s',
             datefmt='%Y.%m.%d %H:%M:%S',
             level=logging.DEBUG,
-            filename=config.get('MY_LOG_FILENAME'),
+            filename=GLOBAL_CONFIG.get('MY_LOG_FILENAME'),
         )
 
         logging.info('--> Выполнение начато')
-        logging.info(f'Параметры конфигурации {config}')
+        logging.info(f'Параметры конфигурации {GLOBAL_CONFIG}')
 
-        log_dir = config['LOG_DIR']
-        report_dir = config['REPORT_DIR']
+        log_dir = GLOBAL_CONFIG['LOG_DIR']
+        report_dir = GLOBAL_CONFIG['REPORT_DIR']
         name, date, extension = get_last_log(log_dir)
 
         log_fullname = f'{log_dir}/{name}'
@@ -169,11 +169,11 @@ def main():
         logging.info(f'Парсим лог "{log_fullname}"')
         parse_log(collector=collector,
                   text=yield_lines(filename=log_fullname, extension=extension),
-                  max_err_perc=config['MAX_ERROR_PERCENT'])
+                  max_err_perc=GLOBAL_CONFIG['MAX_ERROR_PERCENT'])
 
         logging.info(f'Считаем статистику')
         report_data = calculate_statistics(collector=collector,
-                                           report_size=config['REPORT_SIZE'])
+                                           report_size=GLOBAL_CONFIG['REPORT_SIZE'])
 
         logging.info(f'Пишем отчёт "{report_fullname}"')
         save_report(report_data=report_data,
@@ -185,7 +185,7 @@ def main():
     except Exception as ex:
         # ei = sys.exc_info()
         # logging.exception(f'ВОЗНИКЛО ИСКЛЮЧЕНИЕ в строке {ei[2].tb_lineno} {ei[0]} {ex}')
-        logging.exception(f'ВОЗНИКЛО ИСКЛЮЧЕНИЕ')
+        logging.exception(f'ВОЗНИКЛО ИСКЛЮЧЕНИЕ {ex}')
 
     except:
         logging.exception(f'НЕБЫВАЛОЕ ИСКЛЮЧЕНИЕ')
