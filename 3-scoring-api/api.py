@@ -155,38 +155,23 @@ class MethodRequest(BaseSchema):
     arguments = ArgumentsField(required=True, nullable=True)
     method = CharField(required=True, nullable=False)
 
-    def __init__(self, account, login, token):
-        self.account = account  # TODO давайте валидировать эти поля тоже без переобъявления в ините
-        self.login = login
-        self.token = token
-
-    @property
-    def is_admin(self):
-        return self.login == ADMIN_LOGIN
-
-
-def check_auth(request):
-    if request.is_admin:
-        key = datetime.now().strftime("%Y%m%d%H") + ADMIN_SALT
-    else:
-        key = request.account + request.login + SALT
-    key = key.encode()
-    digest = hashlib.sha512(key).hexdigest()
-    if digest == request.token:
-        return True
-    return False
+    @staticmethod
+    def check_auth(account, login, token):
+        is_admin = login == ADMIN_LOGIN
+        if is_admin:
+            key = datetime.now().strftime("%Y%m%d%H") + ADMIN_SALT
+        else:
+            key = account + login + SALT
+        key = key.encode()
+        digest = hashlib.sha512(key).hexdigest()
+        if digest == token:
+            return is_admin
+        else:
+            return None
 
 
 class ValidationError(Exception):
     pass
-
-
-# # TODO так у запроса у же есть метод валидации. Наверное стоит просто инициализировать запроса и вызывать на нем валидацию
-# def validate(body, schema):
-#     errors = dict()  ####################################################################################
-#     schema.validate(body, errors)
-#     if errors:
-#         raise ValidationError(errors)
 
 
 def online_score(ctx, arguments):
@@ -203,7 +188,6 @@ def clients_interests(ctx, arguments):
 
 
 def method_handler(request, ctx, store):
-    # TODO декоратор схемы валидации на каждый метод
     method_map = {
         'online_score': (online_score, OnlineScoreRequest),
         'clients_interests': (clients_interests, ClientsInterestsRequest),
@@ -211,10 +195,10 @@ def method_handler(request, ctx, store):
     body = request["body"]
     try:
         MethodRequest.validate(body)
-        auth = MethodRequest(account=body['account'], login=body['login'], token=body['token'])
-        if not check_auth(auth):
+        is_admin = MethodRequest.check_auth(account=body['account'], login=body['login'], token=body['token'])
+        if is_admin is None:
             return 'Auth error', hs.FORBIDDEN
-        ctx['is_admin'] = auth.is_admin
+        ctx['is_admin'] = is_admin
         method_name = body['method']
         arguments = body['arguments']
         if method_name not in method_map:
