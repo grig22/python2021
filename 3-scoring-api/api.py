@@ -102,7 +102,8 @@ class ClientIDsField(BaseField):
 
 class BaseSchema:
     @classmethod
-    def validate(cls, body, errors):
+    def validate(cls, body):
+        errors = dict()
         for attr, field in vars(cls).items():
             if not isinstance(field, BaseField):
                 continue
@@ -117,6 +118,8 @@ class BaseSchema:
                     field.validate(body[attr])
                 except Exception as ex:
                     errors[attr] = f'{ex}'
+        if errors:
+            raise ValidationError(errors)
 
 
 class ClientsInterestsRequest(BaseSchema):
@@ -133,15 +136,16 @@ class OnlineScoreRequest(BaseSchema):
     gender = GenderField(required=False, nullable=True)
 
     @classmethod
-    def validate(cls, body, errors):
-        super().validate(body, errors)
+    def validate(cls, body):
+        super().validate(body)  # можно было склеить с результатами валидации производного класса
         for pair in [('phone', 'email'), ('first_name', 'last_name'), ('gender', 'birthday')]:
             check = True
             for i in range(len(pair)):
-                check = check and (pair[i] in body and body[pair[i]])
+                field = pair[i]
+                check = check and (field in body and body[field])
             if check:
                 return
-        errors['special'] = 'Missing mandatory pairs'
+        raise ValidationError('must present one of phone-email, first name-last name, gender-birthday')
 
 
 class MethodRequest(BaseSchema):
@@ -177,12 +181,12 @@ class ValidationError(Exception):
     pass
 
 
-# TODO так у запроса у же есть метод валидации. Наверное стоит просто инициализировать запроса и вызывать на нем валидацию
-def validate(body, schema):
-    errors = dict()
-    schema.validate(body, errors)
-    if errors:
-        raise ValidationError(errors)
+# # TODO так у запроса у же есть метод валидации. Наверное стоит просто инициализировать запроса и вызывать на нем валидацию
+# def validate(body, schema):
+#     errors = dict()  ####################################################################################
+#     schema.validate(body, errors)
+#     if errors:
+#         raise ValidationError(errors)
 
 
 def online_score(ctx, arguments):
@@ -206,17 +210,17 @@ def method_handler(request, ctx, store):
     }
     body = request["body"]
     try:
-        validate(body, MethodRequest)
+        MethodRequest.validate(body)
         auth = MethodRequest(account=body['account'], login=body['login'], token=body['token'])
         if not check_auth(auth):
             return 'Auth error', hs.FORBIDDEN
         ctx['is_admin'] = auth.is_admin
-        method = body['method']
+        method_name = body['method']
         arguments = body['arguments']
-        if method not in method_map:
-            return f'Unknown method: {method}', hs.BAD_REQUEST
-        method, schema = method_map[method]
-        validate(arguments, schema)
+        if method_name not in method_map:
+            return f'Unknown method: {method_name}', hs.BAD_REQUEST
+        method, schema = method_map[method_name]
+        schema.validate(arguments)
         return method(ctx=ctx, arguments=arguments), hs.OK
     except ValidationError as ex:
         return f'Validation error: {ex}', hs.UNPROCESSABLE_ENTITY

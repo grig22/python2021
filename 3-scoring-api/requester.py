@@ -23,7 +23,7 @@ else:
 key = key.encode()
 token = hashlib.sha512(key).hexdigest()
 
-sc_or_in = 0000
+sc_or_in = 1111
 
 data = {
     'account': account,
