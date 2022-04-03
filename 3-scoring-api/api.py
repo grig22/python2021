@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import json
-import datetime
+from datetime import datetime
 import logging
 import hashlib
 import uuid
@@ -41,60 +41,63 @@ class BaseField:
 
 class CharField(BaseField):
     def validate(self, payload):
-        return isinstance(payload, str)
+        if not isinstance(payload, str):
+            raise ValidationError('CharField must be str')
 
 
 class ArgumentsField(BaseField):
     def validate(self, payload):
-        return isinstance(payload, dict)
+        if not isinstance(payload, dict):
+            raise ValidationError('ArgumentsField must be dict')
 
 
 class EmailField(CharField):
     def validate(self, payload):
-        if not super().validate(payload):  # TODO это можно бы обобщить
-            return False  # TODO идиоматичнее кидать эксепшн ValidationError с описанием ошибки
-        return '@' in payload
+        super().validate(payload)
+        if '@' not in payload:
+            raise ValidationError('EmailField must contain @')
 
 
 class PhoneField(BaseField):
     def validate(self, payload):
         if not isinstance(payload, (str, int)):
-            return False
-        payload = str(payload)  # где же мой const
+            raise ValidationError('PhoneField must be str or int')
+        payload = str(payload)
         regexp = r'^7\d{10}$'
-        # TODO 0. недостаточно возвращать безликий bool, пользователю лучше в сообщении об ошибке рассказать в чем именно была проблема
-        # после того, как напишу модульные тесты, буду менять все функции валидации
-        # но, на мой взгляд, требования к заполнению полей пользователь может и в документации почитать
-        return bool(re.match(regexp, payload))
+        if not re.match(regexp, payload):
+            raise ValidationError(f'PhoneField must be {regexp}')
 
 
 class DateField(BaseField):
     def validate(self, payload):
         if not isinstance(payload, str):
-            return False
+            raise ValidationError('DateField must be str')
         regexp = r'^\d{2}\.\d{2}\.\d{4}$'
-        return bool(re.match(regexp, payload))
+        if not re.match(regexp, payload):
+            raise ValidationError(f'DateField must be {regexp}')
 
 
 class BirthDayField(DateField):
     def validate(self, payload):
-        if not super().validate(payload):
-            return False
-        birth = datetime.datetime.strptime(payload, "%d.%m.%Y")
-        tdelta = datetime.datetime.now() - birth
-        return tdelta.days <= 365 * 70  # не будем углубляться в летоисчисление
+        super().validate(payload)
+        tdelta = datetime.now() - datetime.strptime(payload, "%d.%m.%Y")
+        max_years = 70
+        if tdelta.days > max_years * 365:
+            raise ValidationError(f'BirthDayField {max_years} years is too much')
 
 
 class GenderField(BaseField):
     def validate(self, payload):
-        return payload in GENDERS
+        if payload not in GENDERS:
+            raise ValidationError(f'GenderField must be in {GENDERS}')
 
 
 class ClientIDsField(BaseField):
     def validate(self, payload):
         if not isinstance(payload, (list, tuple)):
-            return False
-        return all(isinstance(x, int) for x in payload)
+            raise ValidationError('ClientIDsField must be list or tuple')
+        if not all(isinstance(x, int) for x in payload):
+            raise ValidationError('ClientIDsField all ids must be int')
 
 
 class BaseSchema:
@@ -104,14 +107,16 @@ class BaseSchema:
             if not isinstance(field, BaseField):
                 continue
             if field.required and attr not in body:
-                errors[attr] = f'Required field missing: {attr}'
+                errors[attr] = f'required field missing'
                 continue
             if not field.nullable and attr in body and not body[attr]:
-                errors[attr] = f'Field is null: {attr}'
+                errors[attr] = f'field is null'
                 continue
-            if attr in body and body[attr] and not field.validate(body[attr]):
-                errors[attr] = f'Field validation failed: {attr}'
-                continue
+            if attr in body and body[attr]:
+                try:
+                    field.validate(body[attr])
+                except Exception as ex:
+                    errors[attr] = f'{ex}'
 
 
 class ClientsInterestsRequest(BaseSchema):
@@ -158,7 +163,7 @@ class MethodRequest(BaseSchema):
 
 def check_auth(request):
     if request.is_admin:
-        key = datetime.datetime.now().strftime("%Y%m%d%H") + ADMIN_SALT
+        key = datetime.now().strftime("%Y%m%d%H") + ADMIN_SALT
     else:
         key = request.account + request.login + SALT
     key = key.encode()

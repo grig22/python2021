@@ -1,7 +1,7 @@
 import requests
 import json
 import hashlib
-import datetime
+import datetime  # это нужное
 
 BASE_URL = 'http://localhost'
 PORT = 8080
@@ -23,7 +23,7 @@ else:
 key = key.encode()
 token = hashlib.sha512(key).hexdigest()
 
-sc_or_in = 1111
+sc_or_in = 0000
 
 data = {
     'account': account,
