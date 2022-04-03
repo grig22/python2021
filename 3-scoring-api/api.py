@@ -1,7 +1,6 @@
 #!/usr/bin/env python3.9
 # -*- coding: utf-8 -*-
 
-# import abc
 import json
 import datetime
 import logging
@@ -17,12 +16,6 @@ from http import HTTPStatus as hs
 SALT = "Otus"
 ADMIN_LOGIN = "admin"
 ADMIN_SALT = "42"
-# OK = 200
-# BAD_REQUEST = 400
-# FORBIDDEN = 403
-# NOT_FOUND = 404
-# INVALID_REQUEST = 422  # UNPROCESSABLE_ENTITY
-# INTERNAL_ERROR = 500  # INTERNAL_SERVER_ERROR
 ERRORS = {
     hs.BAD_REQUEST: "Bad Request",
     hs.FORBIDDEN: "Forbidden",
@@ -40,7 +33,7 @@ GENDERS = {
 }
 
 
-class BaseField:  # TODO абстрактный базовый класс
+class BaseField:
     def __init__(self, required, nullable):
         self.required = required
         self.nullable = nullable
@@ -59,7 +52,7 @@ class ArgumentsField(BaseField):
 class EmailField(CharField):
     def validate(self, payload):
         if not super().validate(payload):  # TODO это можно бы обобщить
-            return False
+            return False  # TODO идиоматичнее кидать эксепшн ValidationError с описанием ошибки
         return '@' in payload
 
 
@@ -154,7 +147,7 @@ class MethodRequest(BaseSchema):
     method = CharField(required=True, nullable=False)
 
     def __init__(self, account, login, token):
-        self.account = account
+        self.account = account  # TODO давайте валидировать эти поля тоже без переобъявления в ините
         self.login = login
         self.token = token
 
@@ -179,6 +172,7 @@ class ValidationError(Exception):
     pass
 
 
+# TODO так у запроса у же есть метод валидации. Наверное стоит просто инициализировать запроса и вызывать на нем валидацию
 def validate(body, schema):
     errors = dict()
     schema.validate(body, errors)
