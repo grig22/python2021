@@ -4,14 +4,13 @@ import gzip
 import re
 import statistics
 import json
-# import sys
 import os
 import datetime
 import collections
 import logging
 import argparse
 
-GLOBAL_CONFIG = {
+HAPPY_GLOBAL_CONFIG = {
     "REPORT_SIZE": 1000,
     "REPORT_DIR": "./reports",
     "LOG_DIR": "./log",
@@ -126,8 +125,10 @@ def save_report(report_data, report_dir, report_fullname):
     os.makedirs(report_dir, exist_ok=True)
     with open('report.html', mode='rt', encoding="utf-8") as fi:
         body = fi.read().replace('$table_json', json.dumps(report_data, ensure_ascii=False))
-    with open(report_fullname, mode='wt', encoding="utf-8") as fo:
+    temp_filename = 'temporary_file'
+    with open(temp_filename, mode='wt', encoding="utf-8") as fo:
         fo.write(body)
+    os.replace(temp_filename, report_fullname)
 
 
 def merge_config(config, filename):
@@ -136,27 +137,28 @@ def merge_config(config, filename):
             config.update(json.load(ff))
 
 
-def main():
+def main(local_config):
     collector = dict()
 
     try:
         parser = argparse.ArgumentParser()
         parser.add_argument('--config')
-        if args := parser.parse_args():
-            merge_config(GLOBAL_CONFIG, args.config)
+        args = parser.parse_args()
+        if args and args.config:
+            merge_config(local_config, args.config)
 
         logging.basicConfig(
             format='[%(asctime)s] %(levelname).1s %(message)s',
             datefmt='%Y.%m.%d %H:%M:%S',
             level=logging.DEBUG,
-            filename=GLOBAL_CONFIG.get('MY_LOG_FILENAME'),
+            filename=local_config.get('MY_LOG_FILENAME'),
         )
 
         logging.info('--> Выполнение начато')
-        logging.info(f'Параметры конфигурации {GLOBAL_CONFIG}')
+        logging.info(f'Параметры конфигурации {local_config}')
 
-        log_dir = GLOBAL_CONFIG['LOG_DIR']
-        report_dir = GLOBAL_CONFIG['REPORT_DIR']
+        log_dir = local_config['LOG_DIR']
+        report_dir = local_config['REPORT_DIR']
         name, date, extension = get_last_log(log_dir)
 
         log_fullname = f'{log_dir}/{name}'
@@ -167,11 +169,11 @@ def main():
         logging.info(f'Парсим лог "{log_fullname}"')
         parse_log(collector=collector,
                   text=yield_lines(filename=log_fullname, extension=extension),
-                  max_err_perc=GLOBAL_CONFIG['MAX_ERROR_PERCENT'])
+                  max_err_perc=local_config['MAX_ERROR_PERCENT'])
 
         logging.info(f'Считаем статистику')
         report_data = calculate_statistics(collector=collector,
-                                           report_size=GLOBAL_CONFIG['REPORT_SIZE'])
+                                           report_size=local_config['REPORT_SIZE'])
 
         logging.info(f'Пишем отчёт "{report_fullname}"')
         save_report(report_data=report_data,
@@ -181,8 +183,6 @@ def main():
         logging.info(f'--> Выполнение завершено')
 
     except Exception as ex:
-        # ei = sys.exc_info()
-        # logging.exception(f'ВОЗНИКЛО ИСКЛЮЧЕНИЕ в строке {ei[2].tb_lineno} {ei[0]} {ex}')
         logging.exception(f'ВОЗНИКЛО ИСКЛЮЧЕНИЕ {ex}')
 
     except:
@@ -190,4 +190,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main(local_config=HAPPY_GLOBAL_CONFIG)
