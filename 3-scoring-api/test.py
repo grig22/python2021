@@ -5,6 +5,7 @@ import unittest
 from http import HTTPStatus as hs
 
 import api
+from store import Store
 
 
 def cases(cases):
@@ -28,8 +29,7 @@ class TestSuite(unittest.TestCase):
         return api.method_handler(
             request={"body": request, "headers": self.headers},
             ctx=self.context,
-            store=None)
-            # self.settings)
+            store=Store())
 
     def set_valid_auth(self, request):
         if request.get("login") == api.ADMIN_LOGIN:

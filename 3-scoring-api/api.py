@@ -13,6 +13,8 @@ from scoring import get_score, get_interests
 # https://docs.python.org/3/library/http.html
 from http import HTTPStatus as hs
 
+from store import Store
+
 SALT = "Otus"
 ADMIN_LOGIN = "admin"
 ADMIN_SALT = "42"
@@ -182,17 +184,17 @@ class ValidationError(Exception):
     pass
 
 
-def online_score(ctx, arguments):
+def online_score(ctx, arguments, store):
     allowed = {field for field in vars(OnlineScoreRequest) if not field.startswith('__')}
     ctx['has'] = set.intersection(allowed, arguments)
     if ctx['is_admin']:
         return {'score': 42}
-    return {'score': get_score(store=None, **arguments)}  # strict валидация получилась из-за kwargs
+    return {'score': get_score(store=store, **arguments)}  # strict валидация получилась из-за kwargs
 
 
-def clients_interests(ctx, arguments):
+def clients_interests(ctx, arguments, store):
     ctx['nclients'] = len(arguments['client_ids'])
-    return {cid: get_interests(store=None, cid=cid) for cid in arguments['client_ids']}
+    return {cid: get_interests(store=store, cid=cid) for cid in arguments['client_ids']}
 
 
 def method_handler(request, ctx, store):
@@ -213,7 +215,7 @@ def method_handler(request, ctx, store):
             return f'Unknown method: {method_name}', hs.BAD_REQUEST
         method, schema = method_map[method_name]
         schema.validate(arguments)
-        return method(ctx=ctx, arguments=arguments), hs.OK
+        return method(ctx=ctx, arguments=arguments, store=store), hs.OK
     except ValidationError as ex:
         return f'Validation error: {ex}', hs.UNPROCESSABLE_ENTITY
     except Exception as ex:
@@ -224,7 +226,7 @@ class MainHTTPHandler(BaseHTTPRequestHandler):
     router = {
         "method": method_handler
     }
-    store = None
+    store = Store()
 
     def get_request_id(self):
         return self.headers.get('HTTP_X_REQUEST_ID', uuid.uuid4().hex)
