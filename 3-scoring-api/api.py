@@ -135,6 +135,13 @@ class OnlineScoreRequest(BaseSchema):
     birthday = BirthDayField(required=False, nullable=True)
     gender = GenderField(required=False, nullable=True)
 
+    special_fields = ['gender']
+
+    @classmethod
+    def special_true(cls, field, value):
+        if field == 'gender':
+            return value in GENDERS
+
     @classmethod
     def validate(cls, body):
         super().validate(body)  # можно было склеить с результатами валидации производного класса
@@ -142,7 +149,8 @@ class OnlineScoreRequest(BaseSchema):
             check = True
             for i in range(len(pair)):
                 field = pair[i]
-                check = check and (field in body and body[field])
+                check = bool(check and field in body and
+                             (body[field] if field not in cls.special_fields else cls.special_true(field, body[field])))
             if check:
                 return
         raise ValidationError('must present one of phone-email, first name-last name, gender-birthday')
