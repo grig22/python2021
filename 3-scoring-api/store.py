@@ -1,6 +1,7 @@
 from datetime import datetime, timezone, timedelta
 import random
 import redis
+import pickle
 
 
 def now():
@@ -10,7 +11,7 @@ def now():
 class Store:
     def __init__(self):
         # self.score_cache = dict()
-        self.interests = dict() ########
+        self.interests = dict() ######################
         self.MAX_TRY = 10
         self.red = None
 
@@ -19,16 +20,16 @@ class Store:
             for i in range(self.MAX_TRY):
                 try:
                     self.red = redis.Redis()
-                    ping = self.red.ping()
-                    if ping:
+                    if self.red.ping():
                         return self.red
                 except:
-                    continue
+                    pass
         return self.red
 
     def cache_get(self, key):
         if not self.getred() or not (score := self.getred().get(key)):
             return None
+        score = pickle.loads(score)
         if score['created'] + score['ttl'] < now():
             self.red.delete(key)
             return None
@@ -42,7 +43,7 @@ class Store:
             'ttl': timedelta(seconds=ttl),
             'created': now(),
         }
-        self.red.set(key, val)
+        self.red.set(key, pickle.dumps(val))
 
     def get(self, cid):
         if cid not in self.interests:
