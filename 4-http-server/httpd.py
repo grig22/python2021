@@ -18,7 +18,7 @@ class MyHTTPServer:
 
     def serve_forever(self):
         serv_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM, proto=0)
-
+        serv_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)  # в этом стоит разобраться
         try:
             serv_sock.bind((self._host, self._port))
             serv_sock.listen()
@@ -29,7 +29,13 @@ class MyHTTPServer:
                 except Exception as e:
                     print('Client serving failed', e)
         finally:
+            # print('-------------> serve_forever finally')
             serv_sock.close()
+            # OSError: [Errno 98] Address already in use
+            # serv_sock.shutdown(socket.SHUT_RDWR)
+            # sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            # https://stackoverflow.com/questions/4465959/python-errno-98-address-already-in-use/4466035#4466035
+
 
     def serve_client(self, conn):
         try:
@@ -37,7 +43,7 @@ class MyHTTPServer:
             resp = self.handle_request(req)
             self.send_response(conn, resp)
         except ConnectionResetError:
-            conn = None
+            # conn = None  # TODO зачем это
             return
         except Exception as e:
             self.send_error(conn, e)
@@ -52,14 +58,15 @@ class MyHTTPServer:
         method, target, ver = self.parse_request_line(rfile)
         headers = self.parse_headers(rfile)
         host = headers.get('Host')
-        raise Exception('AAAAAAAAAAAAAAAAAAAAAAAA')
-
+        print('host --->', f'"{host}"')
         if not host:
-            raise HTTPError(400, 'Bad request',
-                            'Host header is missing')
-        if host not in (self._server_name,
-                        f'{self._server_name}:{self._port}'):
-            raise HTTPError(404, 'Not found')
+            raise HTTPError(400, 'Bad request', 'Host header is missing')
+        # как-нибудь потом
+        # print('????', self._server_name)
+        # print('????', f'{self._server_name}:{self._port}')
+        # if host not in (self._server_name, f'{self._server_name}:{self._port}'):
+        #     raise HTTPError(404, 'Not found')
+
         return Request(method, target, ver, headers, rfile)
 
     def parse_request_line(self, rfile):
@@ -79,20 +86,24 @@ class MyHTTPServer:
         return method, target, ver
 
     def parse_headers(self, rfile):
-        headers = []
+        headers = dict()
         while True:
             line = rfile.readline(MAX_LINE + 1)
             if len(line) > MAX_LINE:
                 raise HTTPError(494, 'Request header too large')
             if line in (b'\r\n', b'\n', b''):
                 break
-            print('line --->', line)
-            headers.append(line)
+            # print('line --->', line)
+            dec = line.decode('utf-8')
+            # print('dec  --->', dec)
+            key, _, val = dec.partition(':')
+            if val:
+                headers[key] = val.strip()
+                # print(f'head ---> "{key}" "{headers[key]}"')
             if len(headers) > MAX_HEADERS:
                 raise HTTPError(494, 'Too many headers')
-
-        sheaders = b''.join(headers).decode('utf-8')
-        return Parser().parsestr(sheaders)
+            # print('-----------------')
+        return headers
 
     def handle_request(self, req):
         # if req.path == '/users' and req.method == 'POST':
@@ -190,12 +201,13 @@ class Response:
 
 
 if __name__ == '__main__':
-    host = '0.0.0.0'
-    port = 8080
-    name = 'AAAA'
+    g_host = 'localhost'
+    g_port = 8080
+    g_name = 'AAAA'
 
-    serv = MyHTTPServer(host, port, name)
+    serv = MyHTTPServer(g_host, g_port, g_name)
     try:
         serv.serve_forever()
     except KeyboardInterrupt:
+        # print('-----------> except KeyboardInterrupt')
         pass
