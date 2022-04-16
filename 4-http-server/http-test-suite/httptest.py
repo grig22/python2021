@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/python3.9
 import re
 import socket
 import http.client as httplib
@@ -7,7 +7,7 @@ import unittest
 
 class HttpServer(unittest.TestCase):
     host = "localhost"
-    port = 80
+    port = 8080
 
     def setUp(self):
         self.conn = httplib.HTTPConnection(self.host, self.port, timeout=10)
