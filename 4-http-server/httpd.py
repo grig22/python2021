@@ -4,6 +4,8 @@
 import socket
 import http  # TODO return codes
 
+# todo DOCUMENT_ROOT задается аргументом ĸомандной строĸи -r
+DOCUMENT_ROOT = '/home/user/repo/python2021/4-http-server/http-test-suite/httptest'
 
 MAX_LINE = 64*1024
 MAX_HEADERS = 100
@@ -105,7 +107,28 @@ class MyHTTPServer:
             # print('-----------------')
         return headers
 
+
+
+    def sample_result(self):
+
+        contentType = 'text/html; charset=utf-8'
+
+        with open(f'{DOCUMENT_ROOT}/wikipedia_russia.html', 'rb') as fd:
+            body = fd.read()
+
+        headers = [('Content-Type', contentType),
+                   ('Content-Length', len(body))]
+
+        return Response(200, 'OK', headers, body)
+
+
+
     def handle_request(self, req):
+
+
+        return self.sample_result()
+
+        raise HTTPError(404, 'Not found')
         # if req.path == '/users' and req.method == 'POST':
         #     return self.handle_post_users(req)
         #
@@ -117,7 +140,7 @@ class MyHTTPServer:
         #     if user_id.isdigit():
         #         return self.handle_get_user(req, user_id)
 
-        raise HTTPError(404, 'Not found')
+
 
     def send_response(self, conn, resp):
         wfile = conn.makefile('wb')
@@ -153,6 +176,65 @@ class MyHTTPServer:
             body = b'Internal Server Error'
         resp = Response(status, reason, [('Content-Length', len(body))], body)
         self.send_response(conn, resp)
+
+
+
+# def handle_post_users(self, req):
+#     user_id = len(self._users) + 1
+#     self._users[user_id] = {'id': user_id,
+#                             'name': req.query['name'][0],
+#                             'age': req.query['age'][0]}
+#     return Response(204, 'Created')
+#
+#   def handle_get_users(self, req):
+#     accept = req.headers.get('Accept')
+#     if 'text/html' in accept:
+#       contentType = 'text/html; charset=utf-8'
+#       body = '<html><head></head><body>'
+#       body += f'<div>Пользователи ({len(self._users)})</div>'
+#       body += '<ul>'
+#       for u in self._users.values():
+#         body += f'<li>#{u["id"]} {u["name"]}, {u["age"]}</li>'
+#       body += '</ul>'
+#       body += '</body></html>'
+#
+#     elif 'application/json' in accept:
+#       contentType = 'application/json; charset=utf-8'
+#       body = json.dumps(self._users)
+#
+#     else:
+#       # https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/406
+#       return Response(406, 'Not Acceptable')
+#
+#     body = body.encode('utf-8')
+#     headers = [('Content-Type', contentType),
+#                ('Content-Length', len(body))]
+#     return Response(200, 'OK', headers, body)
+#
+#   def handle_get_user(self, req, user_id):
+#     user = self._users.get(int(user_id))
+#     if not user:
+#       raise HTTPError(404, 'Not found')
+#
+#     accept = req.headers.get('Accept')
+#     if 'text/html' in accept:
+#       contentType = 'text/html; charset=utf-8'
+#       body = '<html><head></head><body>'
+#       body += f'#{user["id"]} {user["name"]}, {user["age"]}'
+#       body += '</body></html>'
+#
+#     elif 'application/json' in accept:
+#       contentType = 'application/json; charset=utf-8'
+#       body = json.dumps(user)
+#
+#     else:
+#       # https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/406
+#       return Response(406, 'Not Acceptable')
+#
+#     body = body.encode('utf-8')
+#     headers = [('Content-Type', contentType),
+#                ('Content-Length', len(body))]
+#     return Response(200, 'OK', headers, body)
 
 
 
