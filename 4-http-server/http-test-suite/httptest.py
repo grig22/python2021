@@ -31,7 +31,7 @@ class HttpServer(unittest.TestCase):
         self.assertIsNotNone(server)
 
     def test_directory_index(self):
-        """directory index file exists"""
+        """directory index file exists"""  # формулировка ДЗ не очень понятная, что же всё-таки здесь возвращать
         self.conn.request("GET", "/httptest/dir2/")
         r = self.conn.getresponse()
         data = r.read()
@@ -56,7 +56,7 @@ class HttpServer(unittest.TestCase):
         self.assertEqual(int(r.status), 404)
 
     def test_file_in_nested_folders(self):
-        """file located in nested folders"""
+        """file located in nested folders"""  # нет в постановке txt никакого
         self.conn.request("GET", "/httptest/dir1/dir12/dir123/deep.txt")
         r = self.conn.getresponse()
         data = r.read()
@@ -125,7 +125,9 @@ class HttpServer(unittest.TestCase):
 
     def test_document_root_escaping(self):
         """document root escaping forbidden"""
-        self.conn.request("GET", "/httptest/../../../../../../../../../../../../../etc/passwd")
+        # self.conn.request("GET", "/httptest/../../../../../../../../../../../../../etc/passwd")
+        # self.conn.request("GET", "/httptest/../../../../../../../etc/passwd")  # Invalid MIME type
+        self.conn.request("GET", "/httptest/../../../../../../user/Pictures/4586326227.jpg")
         r = self.conn.getresponse()
         _ = r.read()
         self.assertIn(int(r.status), (400, 403, 404))

@@ -93,14 +93,18 @@ class MyHTTPServer:
     def get_file(self, tar):
         # https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types/Common_types
         ct_map = {
-            'html': 'text/html; charset=utf-8',
-            'css': 'text/css; charset=utf-8',
-            'js': 'text/javascript; charset=utf-8',
+            # 'html': 'text/html; charset=utf-8',
+            # 'js': 'text/javascript; charset=utf-8',
+            # 'css': 'text/css; charset=utf-8',
+            'html': 'text/html',
+            'js': 'text/javascript',
+            'css': 'text/css',
             'jpg': 'image/jpeg',
             'jpeg': 'image/jpeg',
             'png': 'image/png',
             'gif': 'image/gif',
             'swf': 'application/x-shockwave-flash',
+            'txt': 'text/plain; charset=utf-8',
         }
         _, _, ext = tar.rpartition('.')
         ct = ct_map.get(ext.lower())
