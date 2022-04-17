@@ -2,7 +2,7 @@
 
 # https://iximiuz.com/ru/posts/writing-python-web-server-part-3/
 import socket
-import http  # TODO return codes
+from http import HTTPStatus as hs
 
 # todo DOCUMENT_ROOT задается аргументом ĸомандной строĸи -r
 DOCUMENT_ROOT = '/home/user/repo/python2021/4-http-server/http-test-suite'
@@ -31,13 +31,9 @@ class MyHTTPServer:
                 except Exception as e:
                     print('Client serving failed', e)
         finally:
-            # print('-------------> serve_forever finally')
             serv_sock.close()
             # OSError: [Errno 98] Address already in use
-            # serv_sock.shutdown(socket.SHUT_RDWR)
-            # sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             # https://stackoverflow.com/questions/4465959/python-errno-98-address-already-in-use/4466035#4466035
-
 
     def serve_client(self, conn):
         try:
@@ -45,7 +41,6 @@ class MyHTTPServer:
             resp = self.handle_request(req)
             self.send_response(conn, resp)
         except ConnectionResetError:
-            # conn = None  # TODO зачем это
             return
         except Exception as e:
             self.send_error(conn, e)
@@ -53,38 +48,28 @@ class MyHTTPServer:
             req.rfile.close()
         conn.close()
 
-
-
     def parse_request(self, conn):
         rfile = conn.makefile('rb')
         method, target, ver = self.parse_request_line(rfile)
         headers = self.parse_headers(rfile)
         host = headers.get('Host')
-        print('host --->', f'"{host}"')
         if not host:
-            raise HTTPError(400, 'Bad request', 'Host header is missing')
-        # как-нибудь потом
-        # print('????', self._server_name)
-        # print('????', f'{self._server_name}:{self._port}')
-        # if host not in (self._server_name, f'{self._server_name}:{self._port}'):
-        #     raise HTTPError(404, 'Not found')
-
+            raise HTTPError(hs.BAD_REQUEST, 'Host header is missing')
         return Request(method, target, ver, headers, rfile)
 
     def parse_request_line(self, rfile):
         raw = rfile.readline(MAX_LINE + 1)
         if len(raw) > MAX_LINE:
-            raise HTTPError(400, 'Bad request', 'Request line is too long')
+            raise HTTPError(hs.BAD_REQUEST, 'Request line is too long')
         req_line = str(raw, 'utf-8')
         words = req_line.split()
-        print('words --->', words)
         if len(words) != 3:
-            raise HTTPError(400, 'Bad request', 'Malformed request line')
+            raise HTTPError(hs.BAD_REQUEST, 'Malformed request line')
         method, target, ver = words
         if ver != 'HTTP/1.1':
-            raise HTTPError(505, 'HTTP Version Not Supported')
+            raise HTTPError(hs.BAD_REQUEST, 'HTTP Version Not Supported')
         if method not in ['GET', 'HEAD']:
-            raise HTTPError(405, 'Only GET or HEAD Supported')
+            raise HTTPError(hs.METHOD_NOT_ALLOWED, 'Only GET or HEAD Supported')
         return method, target, ver
 
     def parse_headers(self, rfile):
@@ -92,29 +77,19 @@ class MyHTTPServer:
         while True:
             line = rfile.readline(MAX_LINE + 1)
             if len(line) > MAX_LINE:
-                raise HTTPError(494, 'Request header too large')
+                raise HTTPError(hs.BAD_REQUEST, 'Request header too large')
             if line in (b'\r\n', b'\n', b''):
                 break
-            # print('line --->', line)
             dec = line.decode('utf-8')
-            # print('dec  --->', dec)
             key, _, val = dec.partition(':')
             if val:
                 headers[key] = val.strip()
-                # print(f'head ---> "{key}" "{headers[key]}"')
             if len(headers) > MAX_HEADERS:
-                raise HTTPError(494, 'Too many headers')
-            # print('-----------------')
+                raise HTTPError(hs.BAD_REQUEST, 'Too many headers')
         return headers
 
-
-
     def return_file(self, req):
-
         # https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types/Common_types
-        # .html, .css, .js, .jpg, .jpeg, .png, .gif, .swf
-        # contentType = 'text/html; charset=utf-8'
-
         ct_map = {
             'html': 'text/html; charset=utf-8',
             'css': 'text/css; charset=utf-8',
@@ -125,21 +100,15 @@ class MyHTTPServer:
             'gif': 'image/gif',
             'swf': 'application/x-shockwave-flash',
         }
-
-        print('req.target --->', req.target)
-
         _, _, ext = req.target.rpartition('.')
         contentType = ct_map.get(ext.lower())
         if not contentType:
-            raise HTTPError(500, 'Invalid MIME type')
-
+            raise HTTPError(hs.BAD_REQUEST, 'Invalid MIME type')
         with open(f'{DOCUMENT_ROOT}/{req.target}', 'rb') as fd:
             body = fd.read()
-
         headers = [('Content-Type', contentType),
                    ('Content-Length', len(body))]
-
-        return Response(200, 'OK', headers, body)
+        return Response(hs.OK, hs.OK.phrase, headers, body)
 
 
 
@@ -172,7 +141,7 @@ class MyHTTPServer:
             if isinstance(err, HTTPError):
                 status = err.status
                 reason = err.reason
-                body = (err.body or err.reason).encode('utf-8')
+                body = reason.encode('utf-8')
             else:
                 status = 500
                 reason = b'Internal Server Error'
@@ -180,77 +149,17 @@ class MyHTTPServer:
         except:
             status = 500
             reason = b'Internal Server Error'
-            body = b'Internal Server Error'
+            body = b'Fatal Internal Server Error'
         resp = Response(status, reason, [('Content-Length', len(body))], body)
         self.send_response(conn, resp)
 
 
-
-# def handle_post_users(self, req):
-#     user_id = len(self._users) + 1
-#     self._users[user_id] = {'id': user_id,
-#                             'name': req.query['name'][0],
-#                             'age': req.query['age'][0]}
-#     return Response(204, 'Created')
-#
-#   def handle_get_users(self, req):
-#     accept = req.headers.get('Accept')
-#     if 'text/html' in accept:
-#       contentType = 'text/html; charset=utf-8'
-#       body = '<html><head></head><body>'
-#       body += f'<div>Пользователи ({len(self._users)})</div>'
-#       body += '<ul>'
-#       for u in self._users.values():
-#         body += f'<li>#{u["id"]} {u["name"]}, {u["age"]}</li>'
-#       body += '</ul>'
-#       body += '</body></html>'
-#
-#     elif 'application/json' in accept:
-#       contentType = 'application/json; charset=utf-8'
-#       body = json.dumps(self._users)
-#
-#     else:
-#       # https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/406
-#       return Response(406, 'Not Acceptable')
-#
-#     body = body.encode('utf-8')
-#     headers = [('Content-Type', contentType),
-#                ('Content-Length', len(body))]
-#     return Response(200, 'OK', headers, body)
-#
-#   def handle_get_user(self, req, user_id):
-#     user = self._users.get(int(user_id))
-#     if not user:
-#       raise HTTPError(404, 'Not found')
-#
-#     accept = req.headers.get('Accept')
-#     if 'text/html' in accept:
-#       contentType = 'text/html; charset=utf-8'
-#       body = '<html><head></head><body>'
-#       body += f'#{user["id"]} {user["name"]}, {user["age"]}'
-#       body += '</body></html>'
-#
-#     elif 'application/json' in accept:
-#       contentType = 'application/json; charset=utf-8'
-#       body = json.dumps(user)
-#
-#     else:
-#       # https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/406
-#       return Response(406, 'Not Acceptable')
-#
-#     body = body.encode('utf-8')
-#     headers = [('Content-Type', contentType),
-#                ('Content-Length', len(body))]
-#     return Response(200, 'OK', headers, body)
-
-
-
 class HTTPError(Exception):
-    def __init__(self, status, reason, body=None):
+    def __init__(self, status, reason):
         super()
         self.status = status
         self.reason = reason
-        self.body = body
+        # self.body = body
 
 
 class Request:
@@ -261,32 +170,13 @@ class Request:
         self.headers = headers
         self.rfile = rfile
 
-    @property
-    def path(self):
-        return self.url.path
-
-  # @property
-  # @lru_cache(maxsize=None)
-  # def query(self):
-  #   return parse_qs(self.url.query)
-  #
-  # @property
-  # @lru_cache(maxsize=None)
-  # def url(self):
-  #   return urlparse(self.target)
-  #
-  # def body(self):
-  #   size = self.headers.get('Content-Length')
-  #   if not size:
-  #     return None
-  #   return self.rfile.read(size)
 
 class Response:
-  def __init__(self, status, reason, headers=None, body=None):
-    self.status = status
-    self.reason = reason
-    self.headers = headers
-    self.body = body
+    def __init__(self, status, reason, headers=None, body=None):
+        self.status = status
+        self.reason = reason
+        self.headers = headers
+        self.body = body
 
 
 if __name__ == '__main__':
@@ -298,5 +188,4 @@ if __name__ == '__main__':
     try:
         serv.serve_forever()
     except KeyboardInterrupt:
-        # print('-----------> except KeyboardInterrupt')
         pass
