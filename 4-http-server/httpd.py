@@ -1,6 +1,7 @@
 #!/usr/bin/python3.9
 
 # https://iximiuz.com/ru/posts/writing-python-web-server-part-3/
+import os
 import socket
 from http import HTTPStatus as hs
 
@@ -12,11 +13,11 @@ MAX_HEADERS = 100
 
 
 class MyHTTPServer:
-    def __init__(self, host, port, server_name):
+    def __init__(self, host, port):
         self._host = host
         self._port = port
-        self._server_name = server_name
-        self._users = {}
+        # self._server_name = server_name
+        # self._users = {}
 
     def serve_forever(self):
         serv_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM, proto=0)
@@ -88,7 +89,7 @@ class MyHTTPServer:
                 raise HTTPError(hs.BAD_REQUEST, 'Too many headers')
         return headers
 
-    def return_file(self, req):
+    def return_file(self, tar):
         # https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types/Common_types
         ct_map = {
             'html': 'text/html; charset=utf-8',
@@ -100,20 +101,39 @@ class MyHTTPServer:
             'gif': 'image/gif',
             'swf': 'application/x-shockwave-flash',
         }
-        _, _, ext = req.target.rpartition('.')
-        contentType = ct_map.get(ext.lower())
-        if not contentType:
+        _, _, ext = tar.rpartition('.')
+        ct = ct_map.get(ext.lower())
+        if not ct:
             raise HTTPError(hs.BAD_REQUEST, 'Invalid MIME type')
-        with open(f'{DOCUMENT_ROOT}/{req.target}', 'rb') as fd:
+        # TODO 403 chroot
+        with open(f'{DOCUMENT_ROOT}/{tar}', 'rb') as fd:
             body = fd.read()
-        headers = [('Content-Type', contentType),
+        headers = [('Content-Type', ct),
                    ('Content-Length', len(body))]
-        return Response(hs.OK, hs.OK.phrase, headers, body)
+        return Response(hs.OK, 'OK', headers, body)
 
-
+    def return_dir(self, tar):
+        # TODO 403 chroot
+        print('DDD --->', tar)
+        ls = os.listdir(f'{DOCUMENT_ROOT}/{tar}')
+        body = '<html><head></head><body>'
+        for fn in ls:
+            body += f'{fn}<br/>'
+        body += '</body></html>'
+        body = body.encode('utf-8')
+        headers = [('Content-Type', 'text/html; charset=utf-8'),
+                   ('Content-Length', len(body))]
+        return Response(hs.OK, 'OK', headers, body)
 
     def handle_request(self, req):
-        return self.return_file(req)
+        tar = req.target
+        print('taa --->', tar)
+        for ind in ['/', '/index.html']:
+            if tar.endswith(ind):
+                return self.return_dir(tar[:-len(ind)])
+
+        raise Exception('STOOOP')
+        return self.return_file(tar)
 
 
 
@@ -182,9 +202,8 @@ class Response:
 if __name__ == '__main__':
     g_host = 'localhost'
     g_port = 8080
-    g_name = 'AAAA'
 
-    serv = MyHTTPServer(g_host, g_port, g_name)
+    serv = MyHTTPServer(g_host, g_port)
     try:
         serv.serve_forever()
     except KeyboardInterrupt:
