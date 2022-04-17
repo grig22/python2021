@@ -1,4 +1,5 @@
 #!/usr/bin/python3.9
+# -*- coding: utf-8 -*-
 
 # https://iximiuz.com/ru/posts/writing-python-web-server-part-3/
 import os
@@ -89,7 +90,7 @@ class MyHTTPServer:
                 raise HTTPError(hs.BAD_REQUEST, 'Too many headers')
         return headers
 
-    def return_file(self, tar):
+    def get_file(self, tar):
         # https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types/Common_types
         ct_map = {
             'html': 'text/html; charset=utf-8',
@@ -106,15 +107,18 @@ class MyHTTPServer:
         if not ct:
             raise HTTPError(hs.BAD_REQUEST, 'Invalid MIME type')
         # TODO 403 chroot
-        with open(f'{DOCUMENT_ROOT}/{tar}', 'rb') as fd:
-            body = fd.read()
+        try:
+            fn = f'{DOCUMENT_ROOT}/{tar}'
+            with open(fn, 'rb') as fd:
+                body = fd.read()
+        except:
+            raise HTTPError(hs.NOT_FOUND, f'File not found: "{fn}"')
         headers = [('Content-Type', ct),
                    ('Content-Length', len(body))]
         return Response(hs.OK, 'OK', headers, body)
 
-    def return_dir(self, tar):
+    def get_dir(self, tar):
         # TODO 403 chroot
-        print('DDD --->', tar)
         ls = os.listdir(f'{DOCUMENT_ROOT}/{tar}')
         body = '<html><head></head><body>'
         for fn in ls:
@@ -127,13 +131,10 @@ class MyHTTPServer:
 
     def handle_request(self, req):
         tar = req.target
-        print('taa --->', tar)
         for ind in ['/', '/index.html']:
             if tar.endswith(ind):
-                return self.return_dir(tar[:-len(ind)])
-
-        raise Exception('STOOOP')
-        return self.return_file(tar)
+                return self.get_dir(tar[:-len(ind)])
+        return self.get_file(tar)
 
 
 
@@ -164,12 +165,12 @@ class MyHTTPServer:
                 body = reason.encode('utf-8')
             else:
                 status = 500
-                reason = b'Internal Server Error'
+                reason = 'Internal Server Error'
                 body = str(err).encode('utf-8')
         except:
             status = 500
-            reason = b'Internal Server Error'
-            body = b'Fatal Internal Server Error'
+            reason = 'Fatal Internal Server Error'
+            body = b'Unknown Internal Server Error'
         resp = Response(status, reason, [('Content-Length', len(body))], body)
         self.send_response(conn, resp)
 
