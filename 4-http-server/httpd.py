@@ -5,7 +5,7 @@ import socket
 import http  # TODO return codes
 
 # todo DOCUMENT_ROOT задается аргументом ĸомандной строĸи -r
-DOCUMENT_ROOT = '/home/user/repo/python2021/4-http-server/http-test-suite/httptest'
+DOCUMENT_ROOT = '/home/user/repo/python2021/4-http-server/http-test-suite'
 
 MAX_LINE = 64*1024
 MAX_HEADERS = 100
@@ -109,11 +109,31 @@ class MyHTTPServer:
 
 
 
-    def sample_result(self):
+    def return_file(self, req):
 
-        contentType = 'text/html; charset=utf-8'
+        # https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types/Common_types
+        # .html, .css, .js, .jpg, .jpeg, .png, .gif, .swf
+        # contentType = 'text/html; charset=utf-8'
 
-        with open(f'{DOCUMENT_ROOT}/wikipedia_russia.html', 'rb') as fd:
+        ct_map = {
+            'html': 'text/html; charset=utf-8',
+            'css': 'text/css; charset=utf-8',
+            'js': 'text/javascript; charset=utf-8',
+            'jpg': 'image/jpeg',
+            'jpeg': 'image/jpeg',
+            'png': 'image/png',
+            'gif': 'image/gif',
+            'swf': 'application/x-shockwave-flash',
+        }
+
+        print('req.target --->', req.target)
+
+        _, _, ext = req.target.rpartition('.')
+        contentType = ct_map.get(ext)
+        if not contentType:
+            raise HTTPError(500, 'Invalid MIME type')
+
+        with open(f'{DOCUMENT_ROOT}/{req.target}', 'rb') as fd:
             body = fd.read()
 
         headers = [('Content-Type', contentType),
@@ -124,21 +144,8 @@ class MyHTTPServer:
 
 
     def handle_request(self, req):
+        return self.return_file(req)
 
-
-        return self.sample_result()
-
-        raise HTTPError(404, 'Not found')
-        # if req.path == '/users' and req.method == 'POST':
-        #     return self.handle_post_users(req)
-        #
-        # if req.path == '/users' and req.method == 'GET':
-        #     return self.handle_get_users(req)
-        #
-        # if req.path.startswith('/users/'):
-        #     user_id = req.path[len('/users/'):]
-        #     if user_id.isdigit():
-        #         return self.handle_get_user(req, user_id)
 
 
 
