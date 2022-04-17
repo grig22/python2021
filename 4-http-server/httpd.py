@@ -129,7 +129,7 @@ class MyHTTPServer:
         print('req.target --->', req.target)
 
         _, _, ext = req.target.rpartition('.')
-        contentType = ct_map.get(ext)
+        contentType = ct_map.get(ext.lower())
         if not contentType:
             raise HTTPError(500, 'Invalid MIME type')
 
