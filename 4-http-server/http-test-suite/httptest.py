@@ -42,7 +42,7 @@ class HttpServer(unittest.TestCase):
         self.assertEqual(data, b"<html>Directory index file</html>\n")
 
     def test_index_not_found(self):
-        """directory index file absent"""
+        """directory index file absent"""  # про index.html я в общем не понял постановку
         self.conn.request("GET", "/httptest/dir1/")
         r = self.conn.getresponse()
         _ = r.read()

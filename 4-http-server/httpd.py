@@ -8,6 +8,7 @@ import os
 import socket
 from http import HTTPStatus as hs
 import urllib.parse
+import threading
 
 # todo DOCUMENT_ROOT задается аргументом ĸомандной строĸи -r
 DOCUMENT_ROOT = os.path.abspath('/home/user/repo/python2021/4-http-server/http-test-suite')
@@ -32,7 +33,10 @@ class MyHTTPServer:
             while True:
                 conn, _ = serv_sock.accept()
                 try:
-                    self.serve_client(conn)
+                    t = threading.Thread(target=self.serve_client, args=(conn,))
+                    t.start()  # Запуск нового потока
+                    # TODO limit https://stackoverflow.com/questions/19369724/the-right-way-to-limit-maximum-number-of-threads-running-at-once
+                    # self.serve_client(conn)
                 except Exception as e:
                     print('Client serving failed', e)
         finally:
@@ -47,8 +51,8 @@ class MyHTTPServer:
             if req.method == 'HEAD':
                 resp.body = ''
             self.send_response(conn, resp)
-        except ConnectionResetError:
-            return
+        # except ConnectionResetError:
+        #     return
         except Exception as e:
             self.send_error(conn, e)
         else:
