@@ -7,6 +7,7 @@
 import os
 import socket
 from http import HTTPStatus as hs
+import urllib.parse
 
 # todo DOCUMENT_ROOT задается аргументом ĸомандной строĸи -r
 DOCUMENT_ROOT = os.path.abspath('/home/user/repo/python2021/4-http-server/http-test-suite')
@@ -57,6 +58,8 @@ class MyHTTPServer:
     def parse_request(self, conn):
         rfile = conn.makefile('rb')
         method, target, ver = self.parse_request_line(rfile)
+        target = urllib.parse.unquote(target)
+        target, _, _ = target.partition('?')
         headers = self.parse_headers(rfile)
         host = headers.get('Host')
         if not host:
@@ -130,7 +133,10 @@ class MyHTTPServer:
         dn = os.path.abspath(f'{DOCUMENT_ROOT}/{tar}')
         if DOCUMENT_ROOT not in dn:
             raise HTTPError(hs.FORBIDDEN, 'Document root escape')
-        ls = os.listdir(dn)
+        try:
+            ls = os.listdir(dn)
+        except:
+            raise HTTPError(hs.NOT_FOUND, f'Dir not found: "{dn}"')
         body = '<html><head></head><body>'
         for fn in ls:
             body += f'{fn}<br/>'
