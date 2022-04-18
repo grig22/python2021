@@ -176,7 +176,10 @@ class HttpServer(unittest.TestCase):
         self.assertTrue(len(headers) > 0, "no headers found")
 
         statusline = headers.pop(0)
-        (proto, code, status) = statusline.split(b" ")
+        # (proto, code, status) = statusline.split(b" ")  # ValueError: too many values to unpack (expected 3)
+        # https://www.w3.org/Protocols/rfc2616/rfc2616-sec6.html
+        # b'HTTP/1.1 400 HTTP Version Not Supported'
+        code = statusline.split(b" ")[1]
         h = {}
         for k, v in enumerate(headers):
             (name, value) = re.split(b'\s*:\s*', v, 1)

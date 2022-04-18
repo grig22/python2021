@@ -1,7 +1,9 @@
 #!/usr/bin/python3.9
 # -*- coding: utf-8 -*-
-
 # https://iximiuz.com/ru/posts/writing-python-web-server-part-3/
+
+# http://localhost:8080/httptest/wikipedia_russia.html
+
 import os
 import socket
 from http import HTTPStatus as hs
@@ -41,6 +43,8 @@ class MyHTTPServer:
         try:
             req = self.parse_request(conn)
             resp = self.handle_request(req)
+            if req.method == 'HEAD':
+                resp.body = ''
             self.send_response(conn, resp)
         except ConnectionResetError:
             return
@@ -111,8 +115,8 @@ class MyHTTPServer:
         if not ct:
             raise HTTPError(hs.BAD_REQUEST, 'Invalid MIME type')
         # TODO 403 chroot
+        fn = f'{DOCUMENT_ROOT}/{tar}'
         try:
-            fn = f'{DOCUMENT_ROOT}/{tar}'
             with open(fn, 'rb') as fd:
                 body = fd.read()
         except:
@@ -148,6 +152,13 @@ class MyHTTPServer:
         status_line = f'HTTP/1.1 {resp.status} {resp.reason}\r\n'
         wfile.write(status_line.encode('utf-8'))
 
+        # Отвечать следующими заголовĸами для успешных GET-запросов:
+        # Date, Server, Content-Length, Content-Type, Connection
+        # https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers
+        resp.headers.append(('Connection', 'keep-alive'))
+        resp.headers.append(('Date', 'Wed, 21 Oct 2015 07:28:00 GMT'))
+        resp.headers.append(('Server', 'Apache/2.4.1 (Unix)'))
+
         if resp.headers:
             for (key, value) in resp.headers:
                 header_line = f'{key}: {value}\r\n'
@@ -175,7 +186,10 @@ class MyHTTPServer:
             status = 500
             reason = 'Fatal Internal Server Error'
             body = b'Unknown Internal Server Error'
-        resp = Response(status, reason, [('Content-Length', len(body))], body)
+        resp = Response(status=status, reason=reason,
+                        headers=[('Content-Type', 'text/html; charset=utf-8'),
+                                 ('Content-Length', len(body))],
+                        body=body)
         self.send_response(conn, resp)
 
 
