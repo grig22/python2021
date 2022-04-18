@@ -9,7 +9,7 @@ import socket
 from http import HTTPStatus as hs
 
 # todo DOCUMENT_ROOT задается аргументом ĸомандной строĸи -r
-DOCUMENT_ROOT = '/home/user/repo/python2021/4-http-server/http-test-suite'
+DOCUMENT_ROOT = os.path.abspath('/home/user/repo/python2021/4-http-server/http-test-suite')
 
 MAX_LINE = 64*1024
 MAX_HEADERS = 100
@@ -114,8 +114,9 @@ class MyHTTPServer:
         ct = ct_map.get(ext.lower())
         if not ct:
             raise HTTPError(hs.BAD_REQUEST, 'Invalid MIME type')
-        # TODO 403 chroot
-        fn = f'{DOCUMENT_ROOT}/{tar}'
+        fn = os.path.abspath(f'{DOCUMENT_ROOT}/{tar}')
+        if DOCUMENT_ROOT not in fn:
+            raise HTTPError(hs.FORBIDDEN, 'Document root escape')
         try:
             with open(fn, 'rb') as fd:
                 body = fd.read()
@@ -126,8 +127,10 @@ class MyHTTPServer:
         return Response(hs.OK, 'OK', headers, body)
 
     def get_dir(self, tar):
-        # TODO 403 chroot
-        ls = os.listdir(f'{DOCUMENT_ROOT}/{tar}')
+        dn = os.path.abspath(f'{DOCUMENT_ROOT}/{tar}')
+        if DOCUMENT_ROOT not in dn:
+            raise HTTPError(hs.FORBIDDEN, 'Document root escape')
+        ls = os.listdir(dn)
         body = '<html><head></head><body>'
         for fn in ls:
             body += f'{fn}<br/>'
