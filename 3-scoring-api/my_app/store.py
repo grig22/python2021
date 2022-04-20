@@ -11,61 +11,62 @@ def now():
 
 # TODO вынести в файл конфигурации
 config = {
-    'MAX_TRY': 10,
+    'MAX_TRY': 2,
 }
 
 
 class Store:
     def __init__(self):
         self.MAX_TRY = config['MAX_TRY']
-        self.magic_seconds = 2
+        self.magic_seconds = 1
         self.redis = None
 
     def get_redis_instance(self):
-        try:
-            for count in range(0, self.MAX_TRY):
+        for count in range(0, self.MAX_TRY):
+            try:
                 backoff = count * self.magic_seconds
-                print('Reconnecting in {} seconds'.format(backoff))
+                print(f'Connecting in {backoff} seconds')
                 time.sleep(backoff)
-                self.redis = self.redis or redis.Redis()
-                if self.redis and self.redis.ping():
+                if not self.redis:
+                    self.redis = redis.Redis()
+                if self.redis.ping():
                     return
-        except:
-            pass
-
+            except:
+                continue
+        self.redis = None
 
     def try_command(self, f, *args, **kwargs):
-        for count in range(1, self.MAX_TRY + 1):
+        for count in range(0, self.MAX_TRY):
             try:
-                return f(*args, **kwargs)
-            except redis.ConnectionError:
                 backoff = count * self.magic_seconds
-                print('Retrying in {} seconds'.format(backoff))
+                print(f'Trying in {backoff} seconds')
                 time.sleep(backoff)
                 self.get_redis_instance()
-
+                return f(*args, **kwargs)
+            except redis.ConnectionError:
+                pass
 
     def cache_get(self, key):  # FIXME 5
         self.get_redis_instance()
-        if not self.redis or not (score := self.try_command(self.redis.get(key))):
+        if not self.redis or not (score := self.try_command(self.redis.get, key)):
             return None
         else:
             return pickle.loads(score)
 
     def cache_set(self, key, score, ttl):
-        redis_instance = self.get_redis_instance()
-        if not redis_instance:
+        self.get_redis_instance()
+        if not self.redis:
             return None
-        redis_instance.set(name=key, value=pickle.dumps(score), ex=ttl)
+        self.try_command(self.redis.set, name=key, value=pickle.dumps(score), ex=ttl)
 
     def get(self, cid):
-        redis_instance = self.get_redis_instance()
-        if not redis_instance:
+        self.get_redis_instance()
+        if not self.redis:
             return None
-        if not (inte := redis_instance.get(cid)):  # они не пересекаются
+        if not (inte := self.try_command(self.redis.get, cid)):  # они не пересекаются
             interests = ["cars", "pets", "travel", "hi-tech", "sport", "music", "books", "tv", "cinema", "geek", "otus"]
             inte = random.sample(interests, 2)
-            redis_instance.set(cid, pickle.dumps(inte))
+            self.try_command(self.redis.set, cid, pickle.dumps(inte))
         else:
             inte = pickle.loads(inte)
         return inte
@@ -76,11 +77,11 @@ FIXME
 
 + 0. тесты стоит структурировать так, как в описании ДЗ указано
 
-+- 1. зависимости лучше бы, конечно, через poetry оформлять и конкретные версии указывать
++ 1. зависимости лучше бы, конечно, через poetry оформлять и конкретные версии указывать
 
 2. запусков тестов стоит настроить через github actions
 
-3. L13 - конфиг захардкожен, инстанс редиса никак не настроен, red - слишком минималистичное имя в данном контексте)
++ 3. L13 - конфиг захардкожен, инстанс редиса никак не настроен, red - слишком минималистичное имя в данном контексте)
 
 + 4. L31 - у redis есть свой механизм expire
 
@@ -94,36 +95,5 @@ FIXME
 if score := store.cache_get(key) or 0:
     return score
 
-6. не хватает механизма повторных попыток в хранилище
++ 6. не хватает механизма повторных попыток в хранилище
 """
-
-
-    """
-    https://stackoverflow.com/questions/24773114/retry-redis-operation-when-connection-is-down
-    max_retries = 10
-count = 0
-
-r = redis.Redis(host='10.23.*.*', port=6379, db=0)
-
-def try_command(f, *args, **kwargs):
-    while True:
-        try:
-            return f(*args, **kwargs)
-        except redis.ConnectionError:
-            count += 1
-
-            # re-raise the ConnectionError if we've exceeded max_retries
-            if count > max_retries:
-                raise
-
-            backoff = count * 5
-
-            print('Retrying in {} seconds'.format(backoff)
-            time.sleep(backoff)
-
-            r = redis.Redis(host='10.23.*.*', port=6379, db=0)
-
-# this will retry until a result is returned
-# or will re-raise the final ConnectionError
-try_command(r.hset, field, keys, 1)
-    """
