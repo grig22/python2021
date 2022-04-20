@@ -21,19 +21,22 @@ def get_mainpage():
     return list(zip(links, comments))  # TODO yield
 
 
-def download_page(dirname, title_url):
-    print(dirname)
-    text = requests.get(url=title_url).text.encode('utf-8')
-    filename = f"{dirname}/{urllib.parse.quote(title_url, safe='')}"
-    print(filename)
-    with open(filename, 'wb') as fd:
-        fd.write(text)
+def download_page(dirname, page_url):
+    try:
+        text = requests.get(url=page_url).text.encode('utf-8')
+        filename = f"{dirname}/{urllib.parse.quote(page_url, safe='')}"
+        with open(filename, 'wb') as fd:
+            fd.write(text)
+    except Exception as ex:
+        print(f'! EXCEPTION {ex}')
 
 
 def download_all(dirname: str, title_url: str, comments_urls: set):
     pathlib.Path(dirname).mkdir(parents=True, exist_ok=True)
+    # print('--->', title_url)
     download_page(dirname, title_url)
     for url in comments_urls:
+        print('->', url)
         download_page(dirname, url)
 
 
@@ -58,9 +61,7 @@ def main():
         else:
             print(f'DOWNLOAD {title_page}')
             comments_urls = fetch_comments_urls(comments_page)
-            for ii in comments_urls:
-                print(ii)
-            # download_all(dirname, title_page, comments_urls)
+            download_all(dirname, title_page, comments_urls)
 
 
 if __name__ == '__main__':
