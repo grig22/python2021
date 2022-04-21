@@ -1,5 +1,7 @@
 #!/usr/bin/python3.9
 # import requests
+import time
+
 from bs4 import BeautifulSoup
 import re
 import urllib.parse
@@ -10,18 +12,38 @@ import asyncio
 import aiofiles
 # import aiohttp
 from aiohttp import ClientSession
+import random
+import json
 
 # https://realpython.com/async-io-python/#a-full-program-asynchronous-requests
 
 MAINPAGE = 'https://news.ycombinator.com/'
 DUMPDIR = 'pages/'
 
+GLOBAL_TOTAL_FAIL = list()
 
 async def fetch_html(session: ClientSession, url: str) -> str:
-    resp = await session.request(method="GET", url=url)
-    resp.raise_for_status()
-    html = await resp.text()
-    return html
+    # если наседать, кидает 503
+    # 503, message='Service Temporarily Unavailable', url=URL('https://news.ycombinator.com/item?id=31104691')
+    # а если быть настойчивым, то банят на некоторое время
+    # 403, message='Forbidden', url=URL('https://news.ycombinator.com/item?id=14661659')
+    how_long = 30 if url.startswith('https://news.ycombinator.com/item?id=') else 4
+    for retry in range(how_long):
+        try:
+            resp = await session.request(method="GET", url=url)
+            resp.raise_for_status()
+            html = await resp.text()
+            if retry > 0:
+                print(f'fetched on retry {retry}: {url}')
+            return html
+        except Exception as ex:
+            print(f'! HTTP EXCEPTION on retry {retry}: {ex}')
+            magic_seconds = random.uniform(4.0, 8.0)
+            await asyncio.sleep(magic_seconds)
+            continue
+    print(f'!! TOTALLY FAILED: {url}')
+    GLOBAL_TOTAL_FAIL.append(url)
+    return ''
 
 
 async def parse_mainpage(session: ClientSession):
@@ -36,14 +58,14 @@ async def parse_mainpage(session: ClientSession):
 
 
 async def download_page(session: ClientSession, dirname: str, url: str):
+    text = await fetch_html(url=url, session=session)
+    text = text.encode('utf-8')
+    filename = f"{dirname}/{urllib.parse.quote(string=url, safe='')}"
     try:
-        text = await fetch_html(url=url, session=session)
-        text = text.encode('utf-8')
-        filename = f"{dirname}/{urllib.parse.quote(string=url, safe='')}"
         async with aiofiles.open(filename, "wb") as fd:
             fd.write(text)
     except Exception as ex:
-        print(f'! EXCEPTION {ex}')
+        print(f'! FILE EXCEPTION {ex}')
 
 
 async def download_all(session: ClientSession, dirname: str, title_url: str, comments_urls: set):
@@ -78,6 +100,8 @@ async def main():
         big_list = await parse_mainpage(session)
         await asyncio.gather(*[crawl(session=session, title_page=title_page, comments_page=comments_page)
                                for title_page, comments_page in big_list])
+        print('GLOBAL_TOTAL_FAIL')
+        print(json.dumps(sorted(GLOBAL_TOTAL_FAIL), indent=2))
 
 
 if __name__ == '__main__':
