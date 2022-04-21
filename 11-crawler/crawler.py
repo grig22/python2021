@@ -49,9 +49,7 @@ async def download_page(session: ClientSession, dirname: str, url: str):
 async def download_all(session: ClientSession, dirname: str, title_url: str, comments_urls: set):
     pathlib.Path(dirname).mkdir(parents=True, exist_ok=True)
     await download_page(session=session, dirname=dirname, url=title_url)
-    for url in comments_urls:
-        print('->', url)
-        await download_page(session=session, dirname=dirname, url=url)
+    await asyncio.gather(*[download_page(session=session, dirname=dirname, url=url) for url in comments_urls])
 
 
 async def fetch_comments_urls(session: ClientSession, comments_page: str):
@@ -65,18 +63,21 @@ async def fetch_comments_urls(session: ClientSession, comments_page: str):
     return accum
 
 
+async def crawl(session: ClientSession, title_page: str, comments_page: str):
+    dirname = DUMPDIR + urllib.parse.quote(title_page, safe='')
+    if os.path.exists(dirname):
+        print(f'SKIP {title_page}')
+    else:
+        print(f'DOWNLOAD {title_page}')
+        comments_urls = await fetch_comments_urls(session=session, comments_page=comments_page)
+        await download_all(session=session, dirname=dirname, title_url=title_page, comments_urls=comments_urls)
+
+
 async def main():
     async with ClientSession() as session:
         big_list = await parse_mainpage(session)
-        for title_page, comments_page in big_list:
-            dirname = DUMPDIR + urllib.parse.quote(title_page, safe='')
-            if os.path.exists(dirname):
-                print(f'SKIP {title_page}')
-                continue
-            else:
-                print(f'DOWNLOAD {title_page}')
-                comments_urls = await fetch_comments_urls(session=session, comments_page=comments_page)
-                await download_all(session=session, dirname=dirname, title_url=title_page, comments_urls=comments_urls)
+        await asyncio.gather(*[crawl(session=session, title_page=title_page, comments_page=comments_page)
+                               for title_page, comments_page in big_list])
 
 
 if __name__ == '__main__':
