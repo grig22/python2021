@@ -22,13 +22,16 @@ class Store:
         self.redis = None
 
     def get_redis_instance(self):
-        for count in range(0, self.MAX_TRY):
+        first_time = True
+        while True:  #L25
             try:
-                backoff = count * self.magic_seconds
-                print(f'Connecting in {backoff} seconds')
-                time.sleep(backoff)
+                if first_time:
+                    first_time = False
+                    backoff = 4 * self.magic_seconds
+                    print(f'Connecting in {backoff} seconds')
+                    time.sleep(backoff)  #L29
                 if not self.redis:
-                    self.redis = redis.Redis()
+                    self.redis = redis.Redis(host='localhost', port=6379)  #L31
                 if self.redis.ping():
                     return
             except:
@@ -74,26 +77,10 @@ class Store:
 
 """
 FIXME
-
-+ 0. тесты стоит структурировать так, как в описании ДЗ указано
-
-+ 1. зависимости лучше бы, конечно, через poetry оформлять и конкретные версии указывать
-
-2. запусков тестов стоит настроить через github actions
-
-+ 3. L13 - конфиг захардкожен, инстанс редиса никак не настроен, red - слишком минималистичное имя в данном контексте)
-
-+ 4. L31 - у redis есть свой механизм expire
-
-+ 5. L26 - по заданию cache_get должен быть "отказоустойчивым", не возвращать ошибок, если с хранилищем что-то не так
-
-В моём задании сказано:
-Обратите внимание, фунĸции get_score не важна доступность store'а, она использует его ĸаĸ ĸэш 
-и, следовательно, должна работать даже если store сгорел в верхних слоях атмосферы.
-
-Этот механизм и реализован в функции 3-scoring-api/scoring.py:4 def get_score
-if score := store.cache_get(key) or 0:
-    return score
-
-+ 6. не хватает механизма повторных попыток в хранилище
++ 0. test.py - это не юнит тесты, скорее функциональные
++ 1. L31 - настройки типа хоста, порта, таймаута и прочего тоже должны прокидываться сюда
++ 2. L25 - с самим редисом стоит пытаться соединиться пока не получится, а вот получать из него что-то можно и retry'ями
++ 3. L29 - перед первым разом спать не стоит, наверное
+4. нужно добавить юнит тесты и интеграционные тесты с храналищем
+--> хотелось бы узнать более развёрнуто, какие именно тесты добавить, и что они должны тестировать
 """
