@@ -18,31 +18,34 @@ DUMPDIR = 'pages/'
 GLOBAL_TOTAL_FAIL = list()
 NUM_RETRY_MAIN = 30
 NUM_RETRY_OTHER = 4
-PREPARE_TO_FETCH = 2
-MAGIC_RANGE = (4.0, 8.0)
+MAGIC_SECONDS = (2.0, 6.0)
+REQUEST_TIMEOUT = 2.0
 
 
 async def fetch_html(session: ClientSession, url: str) -> str:
     # если наседать, кидает 503  # 2. L26
     # 503, message='Service Temporarily Unavailable', url=URL('https://news.ycombinator.com/item?id=31104691')
-    await asyncio.sleep(PREPARE_TO_FETCH)
     # а если быть настойчивым, то банят на некоторое время
     # 403, message='Forbidden', url=URL('https://news.ycombinator.com/item?id=14661659')
+    if 'https://twitter.com/' in url:
+        return ''  # никому не нравится твиттер
     how_long = NUM_RETRY_MAIN if url.startswith(f'{MAINPAGE}item?id=') else NUM_RETRY_OTHER  # 1. L30
     for retry in range(how_long):
         try:
-            resp = await session.request(method="GET", url=url)
+            real_magic = random.uniform(*MAGIC_SECONDS)
+            # print(f'delay {real_magic:.3f}: {url}')
+            await asyncio.sleep(real_magic)  # 3. L41
+            resp = await session.request(method="GET", url=url, timeout=REQUEST_TIMEOUT)
             resp.raise_for_status()
             html = await resp.text()
-            if retry > 0:
-                print(f'fetched on retry {retry}: {url}')
+            # if retry > 0:
+            if True:
+                print(f'OK on {retry}: {url}')
             return html
         except Exception as ex:
-            print(f'! HTTP EXCEPTION on retry {retry}: {ex}')
-            magic_seconds = random.uniform(*MAGIC_RANGE)  # 3. L41
-            await asyncio.sleep(magic_seconds)
+            print(f'* EXCEPT on {retry}: {ex}')
             continue
-    print(f'!! TOTALLY FAILED: {url}')
+    print(f'** FAIL: {url}')
     GLOBAL_TOTAL_FAIL.append(url)
     return ''
 
@@ -79,7 +82,7 @@ async def download_all(session: ClientSession, dirname: str, title_url: str, com
 
 
 async def fetch_comments_urls(session: ClientSession, comments_page: str):
-    print('COMMENTS', comments_page)
+    # print('COMMENTS', comments_page)
     text = await fetch_html(session, url=comments_page)
     soup = BeautifulSoup(text, 'html.parser')  # print(soup.prettify())
     accum = set()
@@ -94,7 +97,7 @@ async def crawl(session: ClientSession, title_page: str, comments_page: str):
     if os.path.exists(dirname):
         print(f'SKIP {title_page}')
     else:
-        print(f'DOWNLOAD {title_page}')
+        # print(f'DOWNLOAD {title_page}')
         comments_urls = await fetch_comments_urls(session=session, comments_page=comments_page)
         await download_all(session=session, dirname=dirname, title_url=title_page, comments_urls=comments_urls)
 
