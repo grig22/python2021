@@ -1,4 +1,4 @@
-#!/usr/bin/python3.9
+#!/usr/bin/python3.10
 # import requests
 import time
 
@@ -23,11 +23,11 @@ DUMPDIR = 'pages/'
 GLOBAL_TOTAL_FAIL = list()
 
 async def fetch_html(session: ClientSession, url: str) -> str:
-    # если наседать, кидает 503
+    # если наседать, кидает 503  # 2. L26
     # 503, message='Service Temporarily Unavailable', url=URL('https://news.ycombinator.com/item?id=31104691')
     # а если быть настойчивым, то банят на некоторое время
     # 403, message='Forbidden', url=URL('https://news.ycombinator.com/item?id=14661659')
-    how_long = 30 if url.startswith('https://news.ycombinator.com/item?id=') else 4
+    how_long = 30 if url.startswith('https://news.ycombinator.com/item?id=') else 4  # 1. L30
     for retry in range(how_long):
         try:
             resp = await session.request(method="GET", url=url)
@@ -38,7 +38,7 @@ async def fetch_html(session: ClientSession, url: str) -> str:
             return html
         except Exception as ex:
             print(f'! HTTP EXCEPTION on retry {retry}: {ex}')
-            magic_seconds = random.uniform(4.0, 8.0)
+            magic_seconds = random.uniform(4.0, 8.0)  # 3. L41
             await asyncio.sleep(magic_seconds)
             continue
     print(f'!! TOTALLY FAILED: {url}')
@@ -62,7 +62,7 @@ async def download_page(session: ClientSession, dirname: str, url: str):
     text = text.encode('utf-8')
     filename = f"{dirname}/{urllib.parse.quote(string=url, safe='')}"
     try:
-        async with aiofiles.open(filename, "wb") as fd:
+        async with aiofiles.open(filename, "wb") as fd:  # 4. L65
             fd.write(text)
     except Exception as ex:
         print(f'! FILE EXCEPTION {ex}')
@@ -106,3 +106,9 @@ async def main():
 
 if __name__ == '__main__':
     asyncio.run(main())
+
+
+# 1. L30 - кусок url лучше подставлять из констант\конфигов чтобы не плодить копипасту
+# 2. L26 - круто, что нашли, можно сделать параметр ожидания между запросами и вынести его в конфиг
+# 3. L41 - тоже лучше вынести в параметр
+# 4. L65 - а есть вероятность, что получится 2 одинаковых имени файла?
