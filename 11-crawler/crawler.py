@@ -1,16 +1,12 @@
 #!/usr/bin/python3.10
-# import requests
-import time
 
 from bs4 import BeautifulSoup
 import re
 import urllib.parse
 import os
 import pathlib
-
 import asyncio
 import aiofiles
-# import aiohttp
 from aiohttp import ClientSession
 import random
 import json
@@ -19,15 +15,20 @@ import json
 
 MAINPAGE = 'https://news.ycombinator.com/'
 DUMPDIR = 'pages/'
-
 GLOBAL_TOTAL_FAIL = list()
+NUM_RETRY_MAIN = 30
+NUM_RETRY_OTHER = 4
+PREPARE_TO_FETCH = 2
+MAGIC_RANGE = (4.0, 8.0)
+
 
 async def fetch_html(session: ClientSession, url: str) -> str:
     # если наседать, кидает 503  # 2. L26
     # 503, message='Service Temporarily Unavailable', url=URL('https://news.ycombinator.com/item?id=31104691')
+    await asyncio.sleep(PREPARE_TO_FETCH)
     # а если быть настойчивым, то банят на некоторое время
     # 403, message='Forbidden', url=URL('https://news.ycombinator.com/item?id=14661659')
-    how_long = 30 if url.startswith('https://news.ycombinator.com/item?id=') else 4  # 1. L30
+    how_long = NUM_RETRY_MAIN if url.startswith(f'{MAINPAGE}item?id=') else NUM_RETRY_OTHER  # 1. L30
     for retry in range(how_long):
         try:
             resp = await session.request(method="GET", url=url)
@@ -38,7 +39,7 @@ async def fetch_html(session: ClientSession, url: str) -> str:
             return html
         except Exception as ex:
             print(f'! HTTP EXCEPTION on retry {retry}: {ex}')
-            magic_seconds = random.uniform(4.0, 8.0)  # 3. L41
+            magic_seconds = random.uniform(*MAGIC_RANGE)  # 3. L41
             await asyncio.sleep(magic_seconds)
             continue
     print(f'!! TOTALLY FAILED: {url}')
@@ -62,8 +63,11 @@ async def download_page(session: ClientSession, dirname: str, url: str):
     text = text.encode('utf-8')
     filename = f"{dirname}/{urllib.parse.quote(string=url, safe='')}"
     try:
+        # есть вероятность, что будет повтор имени файла, и что контент будет разный
+        # можно дописывать к каждому UUID или инкремент
+        # но для простоты предлагаю пока просто перезаписывать содержимое
         async with aiofiles.open(filename, "wb") as fd:  # 4. L65
-            fd.write(text)
+            await fd.write(text)
     except Exception as ex:
         print(f'! FILE EXCEPTION {ex}')
 
@@ -108,7 +112,7 @@ if __name__ == '__main__':
     asyncio.run(main())
 
 
-# 1. L30 - кусок url лучше подставлять из констант\конфигов чтобы не плодить копипасту
-# 2. L26 - круто, что нашли, можно сделать параметр ожидания между запросами и вынести его в конфиг
-# 3. L41 - тоже лучше вынести в параметр
-# 4. L65 - а есть вероятность, что получится 2 одинаковых имени файла?
+# + 1. L30 - кусок url лучше подставлять из констант\конфигов чтобы не плодить копипасту
+# + 2. L26 - круто, что нашли, можно сделать параметр ожидания между запросами и вынести его в конфиг
+# + 3. L41 - тоже лучше вынести в параметр
+# ? 4. L65 - а есть вероятность, что получится 2 одинаковых имени файла?
