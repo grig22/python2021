@@ -11,7 +11,7 @@ import urllib.parse
 import threading
 
 # todo DOCUMENT_ROOT задается аргументом ĸомандной строĸи -r  # FIXME 1
-DOCUMENT_ROOT = os.path.abspath('/home/user/repo/python2021/4-http-server/http-test-suite')
+DOCUMENT_ROOT = os.path.abspath('/home/user/python2021/4-http-server/http-test-suite')
 
 MAX_LINE = 64*1024
 MAX_HEADERS = 100
@@ -239,6 +239,7 @@ if __name__ == '__main__':
 
     serv = MyHTTPServer(g_host, g_port)
     try:
+        print('STARTING SERVER', g_host, g_port)
         serv.serve_forever()
     except KeyboardInterrupt:
         pass
@@ -252,3 +253,11 @@ if __name__ == '__main__':
 # 5. L20 - получился божественный класс, который делает все на свете
 # https://melevir.medium.com/короче-говоря-принцип-единой-ответсвенности-92840ac55baa
 # + 6. L160 - pep8
+
+# ещё посмотреть
+# File "/home/user/python2021/4-http-server/http-test-suite/httptest.py", line 40, in test_directory_index
+#     self.assertEqual(int(length), 34)
+# AssertionError: 68 != 34
+# File "/home/user/python2021/4-http-server/http-test-suite/httptest.py", line 49, in test_index_not_found
+#     self.assertEqual(int(r.status), 404)
+# AssertionError: 200 != 404
