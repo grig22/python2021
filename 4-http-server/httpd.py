@@ -10,14 +10,14 @@ from http import HTTPStatus as hs
 import urllib.parse
 import threading
 
-# todo DOCUMENT_ROOT задается аргументом ĸомандной строĸи -r
-DOCUMENT_ROOT = os.path.abspath('/home/user/repo/python2021/4-http-server/http-test-suite')
+# todo DOCUMENT_ROOT задается аргументом ĸомандной строĸи -r  # FIXME 1
+DOCUMENT_ROOT = os.path.abspath('/home/user/python2021/4-http-server/http-test-suite')
 
 MAX_LINE = 64*1024
 MAX_HEADERS = 100
 
 
-class MyHTTPServer:
+class MyHTTPServer:  # FIXME 5
     def __init__(self, host, port):
         self._host = host
         self._port = port
@@ -46,17 +46,15 @@ class MyHTTPServer:
 
     def serve_client(self, conn):
         try:
-            req = self.parse_request(conn)
-            resp = self.handle_request(req)
-            if req.method == 'HEAD':
-                resp.body = ''
-            self.send_response(conn, resp)
+            request = self.parse_request(conn)
+            response = self.handle_request(request)
+            self.send_response(conn, response)
         # except ConnectionResetError:
         #     return
         except Exception as e:
             self.send_error(conn, e)
         else:
-            req.rfile.close()
+            request.rfile.close()
         conn.close()
 
     def parse_request(self, conn):
@@ -101,9 +99,9 @@ class MyHTTPServer:
                 raise HTTPError(hs.BAD_REQUEST, 'Too many headers')
         return headers
 
-    def get_file(self, tar):
+    def get_file(self, target, size_only):
         # https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types/Common_types
-        ct_map = {
+        ct_map = {  # FIXME 3
             # 'html': 'text/html; charset=utf-8',
             # 'js': 'text/javascript; charset=utf-8',
             # 'css': 'text/css; charset=utf-8',
@@ -117,48 +115,52 @@ class MyHTTPServer:
             'swf': 'application/x-shockwave-flash',
             'txt': 'text/plain; charset=utf-8',
         }
-        _, _, ext = tar.rpartition('.')
+        _, _, ext = target.rpartition('.')
         ct = ct_map.get(ext.lower())
         if not ct:
             raise HTTPError(hs.BAD_REQUEST, 'Invalid MIME type')
-        fn = os.path.abspath(f'{DOCUMENT_ROOT}/{tar}')
-        if DOCUMENT_ROOT not in fn:
+        filename = os.path.abspath(f'{DOCUMENT_ROOT}/{target}')
+        if DOCUMENT_ROOT not in filename:
             raise HTTPError(hs.FORBIDDEN, 'Document root escape')
         try:
-            with open(fn, 'rb') as fd:
-                body = fd.read()
+            if not size_only:
+                # вычитываем весь файл
+                with open(filename, 'rb') as fd:
+                    body = fd.read()
+                    length = len(body)
+            else:
+                # получаем только размер
+                body = ''
+                length = os.path.getsize(filename)
         except:
-            raise HTTPError(hs.NOT_FOUND, f'File not found: "{fn}"')
+            raise HTTPError(hs.NOT_FOUND, f'File not found: "{filename}"')
         headers = [('Content-Type', ct),
-                   ('Content-Length', len(body))]
+                   ('Content-Length', length)]
         return Response(hs.OK, 'OK', headers, body)
 
-    def get_dir(self, tar):
-        dn = os.path.abspath(f'{DOCUMENT_ROOT}/{tar}')
-        if DOCUMENT_ROOT not in dn:
+    def get_dir(self, target):
+        dirname = os.path.abspath(f'{DOCUMENT_ROOT}/{target}')
+        if DOCUMENT_ROOT not in dirname:
             raise HTTPError(hs.FORBIDDEN, 'Document root escape')
         try:
-            ls = os.listdir(dn)
+            ls = os.listdir(dirname)
         except:
-            raise HTTPError(hs.NOT_FOUND, f'Dir not found: "{dn}"')
+            raise HTTPError(hs.NOT_FOUND, f'Dir not found: "{dirname}"')
         body = '<html><head></head><body>'
-        for fn in ls:
-            body += f'{fn}<br/>'
+        for filename in ls:
+            body += f'{filename}<br/>'
         body += '</body></html>'
         body = body.encode('utf-8')
         headers = [('Content-Type', 'text/html; charset=utf-8'),
                    ('Content-Length', len(body))]
         return Response(hs.OK, 'OK', headers, body)
 
-    def handle_request(self, req):
-        tar = req.target
+    def handle_request(self, request):
+        target = request.target
         for ind in ['/', '/index.html']:
-            if tar.endswith(ind):
-                return self.get_dir(tar[:-len(ind)])
-        return self.get_file(tar)
-
-
-
+            if target.endswith(ind):
+                return self.get_dir(target[:-len(ind)])
+        return self.get_file(target=target, size_only=(request.method == 'HEAD'))
 
     def send_response(self, conn, resp):
         wfile = conn.makefile('wb')
@@ -237,6 +239,25 @@ if __name__ == '__main__':
 
     serv = MyHTTPServer(g_host, g_port)
     try:
+        print('STARTING SERVER', g_host, g_port)
         serv.serve_forever()
     except KeyboardInterrupt:
         pass
+
+
+# 0. нет результатов нагрузочного теста
+# 1. L13 - я бы, конечно, предпочле смотреть готовые ДЗ
+# 2. по заданию еще должны быть воркеры
+# 3. L106 - давайте использовать модуль mimetypes
+# + 4. L52 - в случае head запроса не надо вычитывать файл в память вообще
+# 5. L20 - получился божественный класс, который делает все на свете
+# https://melevir.medium.com/короче-говоря-принцип-единой-ответсвенности-92840ac55baa
+# + 6. L160 - pep8
+
+# ещё посмотреть
+# File "/home/user/python2021/4-http-server/http-test-suite/httptest.py", line 40, in test_directory_index
+#     self.assertEqual(int(length), 34)
+# AssertionError: 68 != 34
+# File "/home/user/python2021/4-http-server/http-test-suite/httptest.py", line 49, in test_index_not_found
+#     self.assertEqual(int(r.status), 404)
+# AssertionError: 200 != 404
